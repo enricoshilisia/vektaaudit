@@ -7,7 +7,12 @@ export function SettingsTabs({ admin }: { admin: boolean }) {
   const path = usePathname();
   const tabs = [
     { key: "team", label: "Team", href: "/settings/team" },
-    ...(admin ? [{ key: "organisation", label: "Organisation", href: "/settings/organisation" }] : []),
+    ...(admin
+      ? [
+          { key: "organisation", label: "Organisation", href: "/settings/organisation" },
+          { key: "microsoft", label: "Microsoft 365", href: "/settings/microsoft" },
+        ]
+      : []),
     { key: "profile", label: "Your profile", href: "/settings/profile" },
   ];
   return (

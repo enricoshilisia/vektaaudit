@@ -50,7 +50,7 @@ export default async function DashboardPage() {
     { done: total > 0, label: "Plan an engagement", sub: "Scope, team, budget and due date", href: "/engagements/new" },
   ];
   const overdue = findings.filter((f) => f.dueDate && f.dueDate < now);
-  const bySev = (["high", "medium", "low"] as const).map((k) => ({ k, n: findings.filter((f) => f.severity === k).length }));
+  const bySev = (["critical", "high", "medium", "low"] as const).map((k) => ({ k, n: findings.filter((f) => f.severity === k).length }));
   const aging = AGING.map((b, i) => ({ ...b, n: overdue.filter((f) => { const d = daysBetween(f.dueDate!, now); return d <= b.max && d > (AGING[i - 1]?.max ?? -1); }).length }));
   const agingMax = Math.max(1, ...aging.map((a) => a.n));
   const week = [
@@ -97,7 +97,7 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
         <Stat label="Plan completion" value={total ? `${Math.round((closed / total) * 100)}%` : "—"} sub={`${closed} of ${total} engagements closed`} />
-        <Stat label="Open findings" value={findings.length} sub={`${bySev[0].n} rated high`} tone={bySev[0].n ? "red" : undefined} />
+        <Stat label="Open findings" value={findings.length} sub={`${bySev[0].n + bySev[1].n} rated critical or high`} tone={bySev[0].n + bySev[1].n ? "red" : undefined} />
         <Stat label="Overdue action plans" value={overdue.length} sub={overdue.length ? "Past the agreed fix date" : "Nothing overdue"} tone={overdue.length ? "amber" : undefined} />
         <Stat label="Evidence requests outstanding" value={reqOpen} sub={`${reqOverdue} overdue from auditees`} tone={reqOverdue ? "amber" : undefined} />
       </div>

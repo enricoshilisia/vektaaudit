@@ -9,7 +9,7 @@ export async function orgInsights(orgId: string): Promise<Insight[]> {
   const now = new Date();
   const [repeats, overdueHigh, overdueReq, flagged] = await Promise.all([
     db.finding.findMany({ where: { orgId, repeat: true, status: { not: "closed" } }, select: { engagement: { select: { area: true } } } }),
-    db.finding.count({ where: { orgId, severity: "high", status: { not: "closed" }, dueDate: { lt: now } } }),
+    db.finding.count({ where: { orgId, severity: { in: ["critical", "high"] }, status: { not: "closed" }, dueDate: { lt: now } } }),
     db.evidenceRequest.count({ where: { engagement: { orgId }, status: { in: ["open", "needs_info"] }, dueDate: { lt: now } } }),
     tbFlags(orgId),
   ]);
@@ -22,7 +22,7 @@ export async function orgInsights(orgId: string): Promise<Insight[]> {
   }
   const [topArea, topN] = [...byArea.entries()].sort((a, b) => b[1] - a[1])[0] ?? [];
   if (topArea && topN && topN >= 2) out.push({ text: `${topArea} has ${topN} open repeat findings. Consider a thematic review.`, href: "/findings?repeat=1", tone: "risk" });
-  if (overdueHigh) out.push({ text: `${overdueHigh} high-severity finding${overdueHigh > 1 ? "s are" : " is"} past the agreed fix date.`, href: "/findings?overdue=1", tone: "risk" });
+  if (overdueHigh) out.push({ text: `${overdueHigh} critical or high finding${overdueHigh > 1 ? "s are" : " is"} past the agreed fix date.`, href: "/findings?overdue=1", tone: "risk" });
   for (const f of flagged.slice(0, 2)) out.push({ text: f.text, href: `/trial-balance?engagement=${f.engagementId}`, tone: "risk" });
   if (overdueReq) out.push({ text: `${overdueReq} evidence request${overdueReq > 1 ? "s are" : " is"} overdue from auditees.`, href: "/requests?overdue=1", tone: "info" });
   return out;

@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "tsx --env-file=.env prisma/seed.ts",
-    "db:seed:enterprise": "tsx --env-file=.env prisma/seed-enterprise.ts",
+    "db:seed:enterprise": "tsx --env-file=.env prisma/seed-enterprise.ts && tsx --env-file=.env prisma/seed-phase2.ts && tsx --env-file=.env prisma/seed-phase3.ts",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate"
   },

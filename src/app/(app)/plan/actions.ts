@@ -9,6 +9,7 @@ import { requireUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
 import { insertEngagement } from "@/lib/server/engagements";
 import { fail } from "@/lib/server/flash";
+import { notifyTeams } from "@/lib/server/m365";
 
 const str = (f: FormData, k: string) => {
   const v = String(f.get(k) ?? "").trim();
@@ -185,6 +186,7 @@ export async function submitPlan(planId: string) {
     await tx.auditPlan.update({ where: { id: p.id }, data: { status: "submitted", submittedAt: new Date() } });
     await logAction(tx, s, "submitted audit plan for approval", "plan", p.id, String(p.year));
   });
+  await notifyTeams(s.org, { title: `Audit plan ${p.year} submitted for approval`, text: `${s.name} submitted the plan. An admin records the audit committee's approval in VektaAudit.`, path: `/plan?year=${p.year}` });
   done(p.year);
 }
 
@@ -198,6 +200,7 @@ export async function approvePlan(planId: string, form: FormData) {
     await tx.auditPlan.update({ where: { id: p.id }, data: { status: "approved", approvedAt, approvedBy } });
     await logAction(tx, s, "recorded plan approval", "plan", p.id, `${p.year}: ${approvedBy}`);
   });
+  await notifyTeams(s.org, { title: `Audit plan ${p.year} approved`, facts: [["Approved by", approvedBy]], path: `/plan?year=${p.year}`, tone: "good" });
   done(p.year);
 }
 

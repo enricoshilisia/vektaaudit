@@ -1,4 +1,5 @@
 import type { Finding } from "@prisma/client";
+import { DirectoryInput } from "./DirectoryInput";
 
 const C5 = [
   { k: "condition", label: "Condition — what we found", ph: "4 of 25 sampled suppliers were activated by a single user…" },
@@ -9,7 +10,7 @@ const C5 = [
 ] as const;
 
 /** The editable parts of a finding, shared by the new and edit forms. */
-export function FindingFields({ f, disabled }: { f?: Finding | null; disabled?: boolean }) {
+export function FindingFields({ f, disabled, directory = false }: { f?: Finding | null; disabled?: boolean; directory?: boolean }) {
   const d = f?.dueDate ? f.dueDate.toISOString().slice(0, 10) : "";
   return (
     <fieldset disabled={disabled} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -24,6 +25,7 @@ export function FindingFields({ f, disabled }: { f?: Finding | null; disabled?: 
           Severity
         </label>
         <select id="severity" name="severity" defaultValue={f?.severity ?? "medium"} className="input">
+          <option value="critical">Critical</option>
           <option value="high">High</option>
           <option value="medium">Medium</option>
           <option value="low">Low</option>
@@ -50,7 +52,7 @@ export function FindingFields({ f, disabled }: { f?: Finding | null; disabled?: 
         <label htmlFor="ownerEmail" className="label">
           Owner email
         </label>
-        <input id="ownerEmail" name="ownerEmail" type="email" defaultValue={f?.ownerEmail ?? ""} className="input" />
+        <DirectoryInput id="ownerEmail" name="ownerEmail" defaultValue={f?.ownerEmail} enabled={directory} nameField="ownerName" />
       </div>
       <div>
         <label htmlFor="dueDate" className="label">

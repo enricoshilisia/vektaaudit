@@ -11,38 +11,71 @@ datasource db {
 
 /// An audit function: an internal audit department or an audit firm.
 model Organization {
-  id        String   @id @default(cuid())
-  name      String
-  kind      String   @default("internal") // internal | firm
-  currency  String   @default("KES")
-  createdAt DateTime @default(now())
+  id             String    @id @default(cuid())
+  name           String
+  kind           String    @default("internal") // internal | firm
+  currency       String    @default("KES")
+  // overdue findings escalate after these many days; level 3 also after a second due-date change
+  esc1Days       Int       @default(30)
+  esc2Days       Int       @default(60)
+  esc3Days       Int       @default(90)
+  esc1To         String    @default("Head of the business unit")
+  esc2To         String    @default("Chief Financial Officer")
+  esc3To         String    @default("Audit committee")
+  // Microsoft 365: the customer's tenant (after their admin approves the VektaAudit app), the mailbox audit mail is
+  // sent from, the SharePoint site reports are filed in, and the Teams channel workflow that receives notifications
+  msTenantId     String?   @unique
+  msTenantName   String?
+  msConnectedAt  DateTime?
+  msConnectedBy  String?
+  msMailbox      String?
+  spSiteUrl      String?
+  spFolder       String    @default("VektaAudit")
+  teamsWebhook   String?
+  autoReminders  Boolean   @default(false) // email overdue owners and self-assessment owners automatically
+  remindersRanAt DateTime?
+  createdAt      DateTime  @default(now())
 
-  users       User[]
-  clients     Client[]
-  engagements Engagement[]
-  findings    Finding[]
-  documents   Document[]
-  auditLogs   AuditLog[]
-  counters    Counter[]
-  invites     Invite[]
-  entities    AuditableEntity[]
-  plans       AuditPlan[]
-  risks       Risk[]
-  controls    Control[]
-  tests       ControlTest[]
+  users         User[]
+  clients       Client[]
+  engagements   Engagement[]
+  findings      Finding[]
+  documents     Document[]
+  auditLogs     AuditLog[]
+  counters      Counter[]
+  invites       Invite[]
+  entities      AuditableEntity[]
+  plans         AuditPlan[]
+  risks         Risk[]
+  controls      Control[]
+  tests         ControlTest[]
+  campaigns     CsaCampaign[]
+  dataSets      DataSet[]
+  systems       ItSystem[]
+  sodRules      SodRule[]
+  accessReviews AccessReview[]
+  frameworks    Framework[]
+  qaReviews     QaReview[]
+  conformance   Conformance[]
+  packs         CommitteePack[]
+  time          TimeEntry[]
+  assignments   Assignment[]
 }
 
 model User {
-  id           String    @id @default(cuid())
-  orgId        String
-  email        String
-  name         String
-  title        String?
-  role         String    @default("AUDITOR") // ADMIN | MANAGER | AUDITOR | VIEWER
-  passwordHash String
-  active       Boolean   @default(true) // deactivated users can't sign in; their history stays
-  lastLoginAt  DateTime?
-  createdAt    DateTime  @default(now())
+  id             String    @id @default(cuid())
+  orgId          String
+  email          String
+  name           String
+  title          String?
+  role           String    @default("AUDITOR") // ADMIN | MANAGER | AUDITOR | VIEWER
+  certifications String? // e.g. CIA, CISA, CPA(K)
+  weeklyHours    Int       @default(40)
+  msObjectId     String? // Entra object id, after signing in with Microsoft
+  passwordHash   String
+  active         Boolean   @default(true) // deactivated users can't sign in; their history stays
+  lastLoginAt    DateTime?
+  createdAt      DateTime  @default(now())
 
   org           Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
   leads         Engagement[]  @relation("lead")
@@ -53,6 +86,9 @@ model User {
   planItems     PlanItem[]
   testsPrepared ControlTest[] @relation("testPreparer")
   testsReviewed ControlTest[] @relation("testReviewer")
+  time          TimeEntry[]
+  assignments   Assignment[]
+  qaReviews     QaReview[]
 
   @@unique([orgId, email])
   @@index([email])
@@ -128,6 +164,8 @@ model Engagement {
   trivialMat       BigInt?
   tbImportedAt     DateTime?
   tbSource         String?
+  rating           String? // satisfactory | needs_improvement | unsatisfactory
+  ratedAt          DateTime?
   createdAt        DateTime  @default(now())
 
   org         Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -143,6 +181,10 @@ model Engagement {
   tbLines     TbLine[]
   planItem    PlanItem?
   tests       ControlTest[]
+  dataSets    DataSet[]
+  qaReviews   QaReview[]
+  time        TimeEntry[]
+  assignments Assignment[]
 
   @@unique([orgId, code])
   @@index([orgId, phase])
@@ -208,6 +250,9 @@ model Finding {
   ownerEmail     String?
   dueDate        DateTime?
   repeat         Boolean   @default(false)
+  originalDue    DateTime? // the first agreed due date
+  dueChanges     Int       @default(0) // times the due date was moved
+  remindedAt     DateTime? // last reminder email
   raisedById     String?
   closedAt       DateTime?
   createdAt      DateTime  @default(now())
@@ -277,6 +322,7 @@ model Document {
   orgId        String
   engagementId String?
   requestId    String?
+  csaItemId    String?
   folder       String   @default("C · Fieldwork")
   name         String
   ext          String
@@ -294,6 +340,7 @@ model Document {
   org        Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   engagement Engagement?      @relation(fields: [engagementId], references: [id], onDelete: Cascade)
   request    EvidenceRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  csaItem    CsaItem?         @relation(fields: [csaItemId], references: [id], onDelete: SetNull)
 
   @@index([orgId, engagementId, folder])
 }
@@ -461,9 +508,11 @@ model Control {
   lastTestedAt DateTime?
   createdAt    DateTime  @default(now())
 
-  org   Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  risks Risk[]
-  tests ControlTest[]
+  org          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  risks        Risk[]
+  tests        ControlTest[]
+  csa          CsaItem[]
+  requirements Requirement[]
 
   @@unique([orgId, code])
 }
@@ -518,4 +567,324 @@ model TestSample {
   test ControlTest @relation(fields: [testId], references: [id], onDelete: Cascade)
 
   @@index([testId, idx])
+}
+
+/// A control self-assessment round: control owners confirm their controls worked, audit checks a sample.
+model CsaCampaign {
+  id        String    @id @default(cuid())
+  orgId     String
+  title     String
+  period    String? // e.g. "July – September 2026"
+  dueDate   DateTime?
+  status    String    @default("open") // open | closed
+  createdBy String
+  createdAt DateTime  @default(now())
+
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  requests CsaRequest[]
+}
+
+/// One control owner's set of controls in a campaign, answered through a link without an account.
+model CsaRequest {
+  id          String    @id @default(cuid())
+  campaignId  String
+  ownerName   String
+  ownerEmail  String?
+  token       String    @unique
+  lastSeenAt  DateTime?
+  emailedAt   DateTime?
+  submittedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  campaign CsaCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  items    CsaItem[]
+}
+
+model CsaItem {
+  id             String    @id @default(cuid())
+  requestId      String
+  controlId      String
+  answer         String? // effective | partly | not_effective
+  comment        String?
+  respondedAt    DateTime?
+  validation     String? // agree | disagree
+  validationNote String?
+  validatedBy    String?
+  validatedAt    DateTime?
+
+  request   CsaRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  control   Control    @relation(fields: [controlId], references: [id], onDelete: Cascade)
+  documents Document[]
+
+  @@unique([requestId, controlId])
+}
+
+/// A report to the audit committee. Built from live data; frozen into a snapshot when issued.
+model CommitteePack {
+  id          String    @id @default(cuid())
+  orgId       String
+  title       String
+  meetingDate DateTime?
+  periodStart DateTime
+  periodEnd   DateTime
+  summary     String?
+  status      String    @default("draft") // draft | issued
+  snapshot    Json?
+  issuedAt    DateTime?
+  issuedBy    String?
+  spUrl       String? // where it was saved in SharePoint
+  createdAt   DateTime  @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+
+/// Time a person spent, on an engagement or not.
+model TimeEntry {
+  id           String   @id @default(cuid())
+  orgId        String
+  userId       String
+  engagementId String?
+  date         DateTime
+  hours        Float
+  category     String   @default("audit") // audit | admin | training | leave
+  note         String?
+  createdAt    DateTime @default(now())
+
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  engagement Engagement?  @relation(fields: [engagementId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, date])
+  @@index([userId, date])
+}
+
+/// Who is booked on what, and when: an engagement, leave or training.
+model Assignment {
+  id             String   @id @default(cuid())
+  orgId          String
+  userId         String
+  engagementId   String?
+  kind           String   @default("audit") // audit | leave | training | other
+  label          String?
+  outlookEventId String? // the event added to the person's Outlook calendar
+  start          DateTime
+  end            DateTime
+  createdAt      DateTime @default(now())
+
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  engagement Engagement?  @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, start])
+}
+
+/// A data extract uploaded for analytics: journals, payments or payroll. Rows keep the raw cells; columns maps fields to them.
+model DataSet {
+  id           String   @id @default(cuid())
+  orgId        String
+  engagementId String?
+  kind         String // journals | payments | payroll
+  name         String
+  headers      Json // the file's column headings
+  columns      Json // field key → column index
+  rowCount     Int
+  uploadedBy   String
+  createdAt    DateTime @default(now())
+
+  org        Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  engagement Engagement?   @relation(fields: [engagementId], references: [id], onDelete: SetNull)
+  rows       DataRow[]
+  runs       AnalyticRun[]
+
+  @@index([orgId])
+}
+
+model DataRow {
+  id        String @id @default(cuid())
+  dataSetId String
+  idx       Int
+  cells     Json
+
+  dataSet DataSet @relation(fields: [dataSetId], references: [id], onDelete: Cascade)
+
+  @@index([dataSetId, idx])
+}
+
+/// One analytics check run over a data set. Each hit is an exception for someone to review.
+model AnalyticRun {
+  id        String   @id @default(cuid())
+  dataSetId String
+  rule      String
+  params    Json     @default("{}")
+  tested    Int
+  hits      Int
+  summary   Json? // extra results, e.g. the first-digit distribution
+  ranBy     String
+  ranAt     DateTime @default(now())
+
+  dataSet    DataSet             @relation(fields: [dataSetId], references: [id], onDelete: Cascade)
+  exceptions AnalyticException[]
+
+  @@index([dataSetId, rule])
+}
+
+model AnalyticException {
+  id         String    @id @default(cuid())
+  runId      String
+  rowIdx     Int
+  detail     String
+  status     String    @default("open") // open | explained | finding
+  note       String?
+  reviewedBy String?
+  reviewedAt DateTime?
+  findingId  String?
+
+  run AnalyticRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+}
+
+/// A system in IT audit scope, with its IT general control ratings.
+model ItSystem {
+  id           String    @id @default(cuid())
+  orgId        String
+  name         String
+  description  String?
+  ownerName    String?
+  ownerEmail   String?
+  critical     Boolean   @default(true)
+  access       String    @default("not_tested") // ITGC ratings: not_tested | effective | needs_improvement | ineffective | not_applicable
+  change       String    @default("not_tested")
+  operations   String    @default("not_tested")
+  development  String    @default("not_applicable")
+  lastTestedAt DateTime?
+  notes        String?
+  createdAt    DateTime  @default(now())
+
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  sodRules SodRule[]
+  lists    AccessList[]
+}
+
+/// Two roles no one person should hold together in a system.
+model SodRule {
+  id          String  @id @default(cuid())
+  orgId       String
+  systemId    String
+  roleA       String
+  roleB       String
+  risk        String  @default("high")
+  description String?
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  system ItSystem     @relation(fields: [systemId], references: [id], onDelete: Cascade)
+}
+
+/// A user access review: system owners confirm who should keep access, through a link.
+model AccessReview {
+  id        String    @id @default(cuid())
+  orgId     String
+  title     String
+  dueDate   DateTime?
+  status    String    @default("open") // open | closed
+  createdBy String
+  createdAt DateTime  @default(now())
+
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  lists AccessList[]
+}
+
+model AccessList {
+  id          String    @id @default(cuid())
+  reviewId    String
+  systemId    String
+  ownerName   String
+  ownerEmail  String?
+  token       String    @unique
+  lastSeenAt  DateTime?
+  emailedAt   DateTime?
+  submittedAt DateTime?
+
+  review  AccessReview  @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  system  ItSystem      @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  entries AccessEntry[]
+}
+
+model AccessEntry {
+  id         String    @id @default(cuid())
+  listId     String
+  account    String
+  person     String?
+  roles      String // separated by ; or |
+  department String?
+  lastLogin  String?
+  decision   String? // keep | remove | change
+  comment    String?
+  decidedAt  DateTime?
+  removedAt  DateTime? // IT confirmed the change was made
+  removedBy  String?
+
+  list AccessList @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@index([listId])
+}
+
+/// A law, regulation or standard, broken into requirements that are mapped to controls.
+model Framework {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  source    String? // the built-in starter it came from, or "imported"
+  createdAt DateTime @default(now())
+
+  org          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  requirements Requirement[]
+}
+
+model Requirement {
+  id          String  @id @default(cuid())
+  frameworkId String
+  ref         String
+  title       String
+  detail      String?
+  sort        Int     @default(0)
+  applicable  Boolean @default(true)
+  note        String? // why it doesn't apply, or other context
+
+  framework Framework @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  controls  Control[]
+
+  @@index([frameworkId, sort])
+}
+
+/// A quality review of a finished engagement, by someone who didn't work on it.
+model QaReview {
+  id           String    @id @default(cuid())
+  orgId        String
+  engagementId String
+  reviewerId   String
+  status       String    @default("in_progress") // in_progress | completed
+  results      Json      @default("{}") // criterion → { met: yes | partly | no, note }
+  notes        String?
+  score        Int?
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  engagement Engagement   @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  reviewer   User         @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+}
+
+/// The audit function's own yearly self-assessment against the professional standards' domains.
+model Conformance {
+  id        String   @id @default(cuid())
+  orgId     String
+  year      Int
+  ratings   Json     @default("{}") // domain → { rating, gaps, actions }
+  updatedBy String
+  updatedAt DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, year])
 }

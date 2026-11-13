@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Avatar, Empty, Pill, SeverityPill, Tabs } from "@/components/ui";
-import { FINDING_PILL, PHASES, PROCEDURE_PILL, REQUEST_PILL, SEVERITY, fmtDate, fmtDateTime, fmtSize, isOverdue, phaseIndex } from "@/lib/format";
+import { FINDING_PILL, PHASES, RATING_PILL, PROCEDURE_PILL, REQUEST_PILL, SEVERITY, fmtDate, fmtDateTime, fmtSize, isOverdue, phaseIndex } from "@/lib/format";
 import { OPERATING_PILL, TEST_STATUS, countExceptions } from "@/lib/risk";
 import { can, requireUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
@@ -14,6 +14,7 @@ import {
   addNote,
   addProcedure,
   createPortalLink,
+  emailPortalLink,
   createRequest,
   logHours,
   prepare,
@@ -24,6 +25,7 @@ import {
   saveConclusion,
   sendBack,
   setPhase,
+  setRating,
 } from "../actions";
 import { createTest } from "../../tests/actions";
 
@@ -128,8 +130,23 @@ export default async function EngagementPage({ params, searchParams }: { params:
               );
             })}
           </ol>
+          {e.rating && <Pill p={RATING_PILL[e.rating]} />}
           {can(s, "manage") && (
-            <form action={setPhase.bind(null, e.id)} className="ml-auto flex items-center gap-1.5">
+            <form action={setRating.bind(null, e.id)} className="ml-auto flex items-center gap-1.5">
+              <label htmlFor="rating" className="sr-only">
+                Overall rating
+              </label>
+              <select id="rating" name="rating" defaultValue={e.rating ?? ""} className="input h-9 w-48">
+                <option value="">Overall rating: not set</option>
+                <option value="satisfactory">Satisfactory</option>
+                <option value="needs_improvement">Needs improvement</option>
+                <option value="unsatisfactory">Unsatisfactory</option>
+              </select>
+              <button className="btn h-9">Rate</button>
+            </form>
+          )}
+          {can(s, "manage") && (
+            <form action={setPhase.bind(null, e.id)} className="flex items-center gap-1.5">
               <label htmlFor="phase" className="sr-only">
                 Phase
               </label>
@@ -504,12 +521,22 @@ function Requests({ e, s }: { e: E; s: S }) {
                 {l.title ? ` · ${l.title}` : ""}
               </span>
               <input readOnly value={`${appUrl}/p/${l.token}`} aria-label={`Portal link for ${l.name}`} className="input h-8 font-mono text-[11px]" />
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-ink-500">{l.lastSeenAt ? `Last opened ${fmtDateTime(l.lastSeenAt)}` : "Not opened yet"}</span>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs text-ink-500">
+                  {l.lastSeenAt ? `Last opened ${fmtDateTime(l.lastSeenAt)}` : "Not opened yet"}
+                  {l.email && ` · ${l.email}`}
+                </span>
                 {can(s, "work") && (
-                  <form action={revokePortalLink.bind(null, l.id)}>
-                    <button className="text-xs font-medium text-high-fg">Revoke</button>
-                  </form>
+                  <div className="flex items-center gap-3">
+                    {l.email && (
+                      <form action={emailPortalLink.bind(null, l.id)}>
+                        <button className="text-xs font-medium text-brand-700">Email the link</button>
+                      </form>
+                    )}
+                    <form action={revokePortalLink.bind(null, l.id)}>
+                      <button className="text-xs font-medium text-high-fg">Revoke</button>
+                    </form>
+                  </div>
                 )}
               </div>
             </div>
@@ -520,6 +547,7 @@ function Requests({ e, s }: { e: E; s: S }) {
                 <input name="name" required minLength={2} className="input" placeholder="Auditee name" aria-label="Auditee name" />
                 <input name="title" className="input" placeholder="Role" aria-label="Role" />
               </div>
+              <input name="email" type="email" className="input" placeholder="Their email (to send the link from Outlook)" aria-label="Auditee email" />
               <button className="btn btn-sm self-start">Create link</button>
             </form>
           )}

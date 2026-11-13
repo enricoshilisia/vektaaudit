@@ -41,3 +41,8 @@
 .tabular {
   font-variant-numeric: tabular-nums;
 }
+
+/* hidden labels inside wide tables are absolutely positioned; keep them inside the scroll box so the page never scrolls sideways */
+.overflow-x-auto {
+  position: relative;
+}

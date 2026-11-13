@@ -1,7 +1,9 @@
 import type { Prisma } from "@prisma/client";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Empty, PageHeader, Pill, SeverityPill } from "@/components/ui";
+import clsx from "clsx";
+import { Empty, PageHeader, Pill, SeverityPill, Tabs } from "@/components/ui";
+import { ESC_PILL, escalation, escalationTo } from "@/lib/issues";
 import { FINDING_PILL, SEVERITY, fmtDate, isOverdue } from "@/lib/format";
 import { can, requireUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
@@ -22,11 +24,12 @@ export default async function FindingsPage({ searchParams }: { searchParams: Pro
     ...(q.repeat ? { repeat: true } : {}),
     ...(q.engagement ? { engagementId: q.engagement } : {}),
   };
-  const [findings, total] = await Promise.all([
+  const [findings, total, org] = await Promise.all([
     db.finding.findMany({ where, include: { engagement: { select: { name: true, area: true } } }, orderBy: [{ dueDate: "asc" }] }),
     db.finding.count({ where: { orgId: s.org } }),
+    db.organization.findUniqueOrThrow({ where: { id: s.org } }),
   ]);
-  const rank = { high: 0, medium: 1, low: 2 } as Record<string, number>;
+  const rank = { critical: -1, high: 0, medium: 1, low: 2 } as Record<string, number>;
   findings.sort((a, b) => rank[a.severity] - rank[b.severity]);
 
   const href = (patch: Partial<Search>) => {
@@ -57,11 +60,19 @@ export default async function FindingsPage({ searchParams }: { searchParams: Pro
           </>
         }
       />
+      <Tabs
+        active="register"
+        tabs={[
+          { key: "register", label: "Register", href: "/findings" },
+          { key: "overview", label: "Overview & escalation", href: "/findings/overview" },
+        ]}
+      />
       <div className="flex flex-wrap items-center gap-2">
         {chip("Open", href({ status: "open" }), status === "open")}
         {chip("Closed", href({ status: "closed" }), status === "closed")}
         {chip("All", href({ status: "all" }), status === "all")}
         <span className="mx-1 h-5 w-px bg-line-strong" aria-hidden />
+        {chip("Critical", href({ severity: q.severity === "critical" ? undefined : "critical" }), q.severity === "critical")}
         {chip("High", href({ severity: q.severity === "high" ? undefined : "high" }), q.severity === "high")}
         {chip("Medium", href({ severity: q.severity === "medium" ? undefined : "medium" }), q.severity === "medium")}
         {chip("Low", href({ severity: q.severity === "low" ? undefined : "low" }), q.severity === "low")}
@@ -84,11 +95,13 @@ export default async function FindingsPage({ searchParams }: { searchParams: Pro
                   <th className="th">Owner</th>
                   <th className="th">Due</th>
                   <th className="th">Status</th>
+                  <th className="th">Escalation</th>
                 </tr>
               </thead>
               <tbody>
                 {findings.map((f) => {
                   const late = isOverdue(f.dueDate, f.status === "closed");
+                  const level = escalation(f, org);
                   return (
                     <tr key={f.id} className="border-t border-line-soft">
                       <td className="td">
@@ -107,6 +120,16 @@ export default async function FindingsPage({ searchParams }: { searchParams: Pro
                       <td className={`td tabular whitespace-nowrap ${late ? "font-medium text-high-dot" : ""}`}>{fmtDate(f.dueDate)}</td>
                       <td className="td">
                         <Pill p={late ? FINDING_PILL.overdue : FINDING_PILL[f.status]} />
+                      </td>
+                      <td className="td">
+                        {level ? (
+                          <span className={clsx("pill", ESC_PILL[level])} title={`Escalated to ${escalationTo(level, org)}`}>
+                            Level {level}
+                          </span>
+                        ) : (
+                          <span className="text-ink-300">—</span>
+                        )}
+                        {f.dueChanges > 0 && <div className="text-[11px] text-ink-500">date moved {f.dueChanges}×</div>}
                       </td>
                     </tr>
                   );

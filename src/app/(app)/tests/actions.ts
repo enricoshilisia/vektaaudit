@@ -9,6 +9,7 @@ import { logAction } from "@/lib/server/audit";
 import { requireUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
 import { fail } from "@/lib/server/flash";
+import { notifyTeams } from "@/lib/server/m365";
 
 const str = (f: FormData, k: string) => {
   const v = String(f.get(k) ?? "").trim();
@@ -187,6 +188,14 @@ export async function submitTest(id: string, form: FormData) {
   await db.$transaction(async (tx) => {
     await tx.controlTest.update({ where: { id }, data: { result, conclusion, status: "in_review", preparedById: s.sub, preparedAt: new Date() } });
     await logAction(tx, s, "submitted control test for review", "engagement", t.engagementId, `${t.ref} ${t.control.code}: ${result.replace("_", " ")}`);
+  });
+  const label = { effective: "Effective", effective_exception: "Effective, with exception", ineffective: "Ineffective" }[result];
+  await notifyTeams(s.org, {
+    title: `Control test waiting for review: ${t.ref} ${t.control.code}`,
+    text: t.control.title,
+    facts: [["Prepared by", s.name], ["Result", label], ["Items tested", String(samples.length)]],
+    path: `/tests/${id}`,
+    tone: result === "ineffective" ? "attention" : "accent",
   });
   page(id);
 }

@@ -8,6 +8,7 @@ import { REQUEST_PILL, fmtDate, fmtSize, isOverdue } from "@/lib/format";
 import { db } from "@/lib/server/db";
 import { addDocument } from "@/lib/server/documents";
 import { fail } from "@/lib/server/flash";
+import { notifyTeams } from "@/lib/server/m365";
 
 export const metadata: Metadata = { title: "Auditee portal", robots: { index: false } };
 
@@ -45,6 +46,7 @@ async function submit(token: string, requestId: string, form: FormData) {
     },
     { timeout: 60000 },
   );
+  await notifyTeams(l.engagement.orgId, { title: `Evidence received: ${r.code} ${r.title}`, facts: [["Engagement", `${l.engagement.code} ${l.engagement.name}`], ["From", l.name], ["Files", String(files.length)]], path: `/engagements/${l.engagementId}?tab=requests` });
   revalidatePath(`/p/${token}`);
 }
 

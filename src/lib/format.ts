@@ -48,6 +48,7 @@ export const FINDING_PILL: Record<string, Pill> = {
 };
 
 export const SEVERITY: Record<string, { label: string; cls: string; dot: string; bar: string }> = {
+  critical: { label: "Critical", cls: "bg-[#7A1F17] text-white", dot: "bg-white", bar: "#7A1F17" },
   high: { label: "High", cls: RED, dot: "bg-high-dot", bar: "#B42318" },
   medium: { label: "Medium", cls: AMBER, dot: "bg-med-dot", bar: "#DC6803" },
   low: { label: "Low", cls: GREY, dot: "bg-ink-400", bar: "#7A8A9C" },
@@ -78,6 +79,12 @@ export const LEAD_PILL: Record<string, Pill> = {
   testing: pill("Testing", BLUE),
   in_review: pill("In review", AMBER),
   signed_off: pill("Signed off", GREEN),
+};
+
+export const RATING_PILL: Record<string, Pill> = {
+  satisfactory: pill("Satisfactory", GREEN),
+  needs_improvement: pill("Needs improvement", AMBER),
+  unsatisfactory: pill("Unsatisfactory", RED),
 };
 
 /** Remembers a collapsed sidebar, so the server draws it that way (no flicker). */

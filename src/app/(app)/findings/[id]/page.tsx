@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { FindingFields } from "@/components/FindingFields";
 import { Pill, SeverityPill } from "@/components/ui";
 import { FINDING_PILL, SEVERITY, fmtDate, fmtDateTime, isOverdue } from "@/lib/format";
+import { ESC_PILL, daysOverdue, escalation, escalationTo } from "@/lib/issues";
 import { can, requireUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
 import { addComment, moveFinding, recordResponse, updateFinding } from "../actions";
@@ -32,6 +33,8 @@ export default async function FindingPage({ params, searchParams }: { params: Pr
   });
   if (!f) notFound();
   const late = isOverdue(f.dueDate, f.status === "closed");
+  const org = await db.organization.findUniqueOrThrow({ where: { id: s.org } });
+  const level = escalation(f, org);
   const step = (name: string, label: string, primary = false, withNote = false) => (
     <form action={moveFinding.bind(null, f.id)} className="flex flex-wrap gap-2">
       <input type="hidden" name="step" value={name} />
@@ -57,6 +60,16 @@ export default async function FindingPage({ params, searchParams }: { params: Pr
               <SeverityPill s={SEVERITY[f.severity]} />
               <Pill p={late ? FINDING_PILL.overdue : FINDING_PILL[f.status]} />
               {f.repeat && <span className="pill bg-med-bg text-med-fg">Repeat finding</span>}
+              {level !== null && (
+                <span className={`pill ${ESC_PILL[level]}`} title={late ? `${daysOverdue(f.dueDate)} days overdue` : undefined}>
+                  {level === 0 ? "Overdue: owner reminded" : `Escalated to ${escalationTo(level, org)}`}
+                </span>
+              )}
+              {f.dueChanges > 0 && (
+                <span className="pill bg-line-soft text-ink-700">
+                  Due date moved {f.dueChanges}× · first agreed {fmtDate(f.originalDue)}
+                </span>
+              )}
               {can(s, "work") && f.status !== "closed" && !edit && (
                 <Link href={`/findings/${f.id}?edit=1`} className="btn btn-sm ml-auto">
                   Edit
@@ -74,7 +87,7 @@ export default async function FindingPage({ params, searchParams }: { params: Pr
 
           {edit && can(s, "work") ? (
             <form action={updateFinding.bind(null, f.id)} className="flex flex-col gap-4 p-6">
-              <FindingFields f={f} />
+              <FindingFields f={f} directory={!!org.msTenantId} />
               <div className="flex gap-2">
                 <button className="btn-primary">Save changes</button>
                 <Link href={`/findings/${f.id}`} className="btn">

@@ -9,7 +9,9 @@ import { logAction, nextNumber } from "@/lib/server/audit";
 import { requireUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
 import { insertEngagement } from "@/lib/server/engagements";
-import { fail } from "@/lib/server/flash";
+import { fail, notice } from "@/lib/server/flash";
+import { emailHtml, sendMail } from "@/lib/server/m365";
+import { appUrl } from "@/lib/server/microsoft";
 
 const str = (f: FormData, k: string) => {
   const v = String(f.get(k) ?? "").trim();
@@ -99,12 +101,26 @@ export async function setPhase(id: string, form: FormData) {
   page(id);
 }
 
+/** The overall rating of the audit, reported to the audit committee. */
+export async function setRating(id: string, form: FormData) {
+  const s = await requireUser("manage");
+  const e = await own(s.org, id);
+  const v = String(form.get("rating") ?? "");
+  const rating = v ? z.enum(["satisfactory", "needs_improvement", "unsatisfactory"]).parse(v) : null;
+  await db.$transaction(async (tx) => {
+    await tx.engagement.update({ where: { id }, data: { rating, ratedAt: rating ? new Date() : null } });
+    await logAction(tx, s, rating ? "rated engagement" : "cleared engagement rating", "engagement", id, `${e.code}${rating ? `: ${rating.replace("_", " ")}` : ""}`);
+  });
+  page(id);
+}
+
 export async function logHours(id: string, form: FormData) {
   const s = await requireUser("work");
   const hours = z.coerce.number().int().min(1).max(200).parse(form.get("hours"));
   await own(s.org, id);
   await db.$transaction(async (tx) => {
     await tx.engagement.update({ where: { id }, data: { actualHours: { increment: hours } } });
+    await tx.timeEntry.create({ data: { orgId: s.org, userId: s.sub, engagementId: id, date: new Date(), hours, category: "audit" } });
     await logAction(tx, s, "logged time", "engagement", id, `${hours} h`);
   });
   page(id);
@@ -260,6 +276,41 @@ export async function createPortalLink(id: string, form: FormData) {
     return l;
   });
   page(id);
+}
+
+/** Emails the auditee their portal link from the audit mailbox, with the open requests listed. */
+export async function emailPortalLink(linkId: string) {
+  const s = await requireUser("work");
+  const l = await db.portalLink.findFirst({
+    where: { id: linkId, revokedAt: null, engagement: { orgId: s.org } },
+    include: { engagement: { include: { org: true, requests: { where: { status: { in: ["open", "needs_info"] } }, orderBy: { code: "asc" } } } } },
+  });
+  if (!l) return fail("Portal link not found");
+  if (!l.email) return fail("Add the auditee's email to the link first");
+  const e = l.engagement;
+  const due = (d: Date | null) => (d ? `, due ${d.toISOString().slice(0, 10)}` : "");
+  try {
+    await sendMail(e.org, {
+      to: [l.email],
+      subject: `${e.name}: documents requested by internal audit`,
+      html: emailHtml({
+        orgName: e.org.name,
+        heading: `Hello ${l.name}`,
+        paragraphs: [
+          `As part of the audit "${e.name}", we need some documents from you. You can see each request and upload files through the secure link below. You don't need an account.`,
+          ...(e.requests.length ? [`Open requests: ${e.requests.map((r) => `${r.code} ${r.title}${due(r.dueDate)}`).join("; ")}.`] : []),
+        ],
+        button: { label: "Open the requests", url: `${appUrl()}/p/${l.token}` },
+        footer: `Sent by ${s.name} for ${e.org.name} internal audit. Please don't forward this link: anyone with it can see these requests.`,
+      }),
+    });
+  } catch (err) {
+    return fail((err as Error).message);
+  }
+  await db.$transaction(async (tx) => {
+    await logAction(tx, s, "emailed auditee portal link", "engagement", e.id, `to ${l.name} <${l.email}>`);
+  });
+  return notice(`Link emailed to ${l.email}`);
 }
 
 export async function revokePortalLink(linkId: string) {

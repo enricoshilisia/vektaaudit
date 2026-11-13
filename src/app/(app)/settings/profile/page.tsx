@@ -25,6 +25,18 @@ export default async function ProfilePage() {
           </label>
           <input id="title" name="title" defaultValue={u.title ?? ""} className="input" />
         </div>
+        <div>
+          <label htmlFor="certifications" className="label">
+            Certifications
+          </label>
+          <input id="certifications" name="certifications" defaultValue={u.certifications ?? ""} className="input" placeholder="e.g. CIA, CISA, CPA(K)" />
+        </div>
+        <div className="w-40">
+          <label htmlFor="weeklyHours" className="label">
+            Working hours a week
+          </label>
+          <input id="weeklyHours" name="weeklyHours" type="number" min={1} max={80} defaultValue={u.weeklyHours} className="input" />
+        </div>
         <p className="text-xs text-ink-500">Email: {u.email}</p>
         <button className="btn-primary self-start">Save</button>
       </form>

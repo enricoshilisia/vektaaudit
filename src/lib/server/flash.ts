@@ -14,6 +14,15 @@ export async function readFlash() {
  * shown in a banner. (Production builds hide the text of thrown errors, so a plain throw would only say "error".)
  */
 export async function fail(message: string): Promise<never> {
+  return flashAndReturn(message);
+}
+
+/** Like fail, for good news: back to the page with a confirmation. */
+export async function notice(message: string): Promise<never> {
+  return flashAndReturn(`ok:${message}`);
+}
+
+async function flashAndReturn(message: string): Promise<never> {
   (await cookies()).set(FLASH_COOKIE, `${Date.now()}|${message}`, { path: "/", maxAge: 60, sameSite: "lax" });
   const ref = (await headers()).get("referer");
   let back = "/dashboard";

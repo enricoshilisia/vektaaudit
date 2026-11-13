@@ -93,11 +93,34 @@ export async function updateOrganisation(form: FormData) {
   revalidatePath("/", "layout");
 }
 
+/** When overdue findings escalate, and to whom. */
+export async function updateEscalation(form: FormData) {
+  const s = await requireUser("admin");
+  const day = z.coerce.number().int().min(1).max(730);
+  const to = z.string().trim().min(2, "Say who each level escalates to").max(80);
+  const d = {
+    esc1Days: day.parse(form.get("esc1Days")),
+    esc2Days: day.parse(form.get("esc2Days")),
+    esc3Days: day.parse(form.get("esc3Days")),
+    esc1To: to.parse(form.get("esc1To")),
+    esc2To: to.parse(form.get("esc2To")),
+    esc3To: to.parse(form.get("esc3To")),
+  };
+  if (!(d.esc1Days < d.esc2Days && d.esc2Days < d.esc3Days)) return fail("Each level needs more days overdue than the one before");
+  await db.$transaction(async (tx) => {
+    await tx.organization.update({ where: { id: s.org }, data: d });
+    await logAction(tx, s, "changed escalation rules", "organization", s.org, `${d.esc1Days}/${d.esc2Days}/${d.esc3Days} days`);
+  });
+  revalidatePath("/settings/organisation");
+}
+
 export async function updateProfile(form: FormData) {
   const s = await requireUser();
-  const d = z.object({ name: z.string().trim().min(2).max(80), title: z.string().trim().max(80) }).parse({ name: form.get("name"), title: form.get("title") ?? "" });
+  const d = z
+    .object({ name: z.string().trim().min(2).max(80), title: z.string().trim().max(80), certifications: z.string().trim().max(200), weeklyHours: z.coerce.number().int().min(1).max(80) })
+    .parse({ name: form.get("name"), title: form.get("title") ?? "", certifications: form.get("certifications") ?? "", weeklyHours: form.get("weeklyHours") || 40 });
   await db.$transaction(async (tx) => {
-    await tx.user.update({ where: { id: s.sub }, data: { name: d.name, title: d.title || null } });
+    await tx.user.update({ where: { id: s.sub }, data: { name: d.name, title: d.title || null, certifications: d.certifications || null, weeklyHours: d.weeklyHours } });
     await logAction(tx, { ...s, name: d.name }, "updated profile", "user", s.sub);
   });
   revalidatePath("/", "layout");

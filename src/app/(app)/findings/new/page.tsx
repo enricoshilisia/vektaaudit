@@ -11,6 +11,7 @@ export const metadata: Metadata = { title: "New finding" };
 export default async function NewFindingPage({ searchParams }: { searchParams: Promise<{ engagement?: string; ref?: string }> }) {
   const s = await requireUser("work");
   const { engagement, ref } = await searchParams;
+  const org = await db.organization.findUniqueOrThrow({ where: { id: s.org }, select: { msTenantId: true } });
   const engagements = await db.engagement.findMany({ where: { orgId: s.org, phase: { not: "closed" } }, orderBy: { name: "asc" }, select: { id: true, name: true, code: true } });
   return (
     <>
@@ -32,7 +33,7 @@ export default async function NewFindingPage({ searchParams }: { searchParams: P
             ))}
           </select>
         </div>
-        <FindingFields />
+        <FindingFields directory={!!org.msTenantId} />
         <div className="flex gap-2">
           <button className="btn-primary">Raise finding</button>
           <Link href="/findings" className="btn">
