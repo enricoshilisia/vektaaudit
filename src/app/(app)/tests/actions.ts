@@ -9,6 +9,7 @@ import { logAction } from "@/lib/server/audit";
 import { requireUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
 import { fail } from "@/lib/server/flash";
+import { assertOpen } from "@/lib/server/lock";
 import { notifyTeams } from "@/lib/server/m365";
 
 const str = (f: FormData, k: string) => {
@@ -31,6 +32,7 @@ export async function createTest(form: FormData) {
   if (!e) return fail("Engagement not found");
   if (!c) return fail("Control not found");
   if (e.phase === "closed") return fail("This engagement is closed");
+  await assertOpen(e.id);
   const t = await db.$transaction(async (tx) => {
     const n = (await tx.controlTest.count({ where: { engagementId } })) + 1;
     const created = await tx.controlTest.create({
@@ -56,6 +58,7 @@ export async function createTest(form: FormData) {
 async function own(orgId: string, id: string, editing = true) {
   const t = await db.controlTest.findFirst({ where: { id, orgId }, include: { control: true, engagement: { select: { phase: true } } } });
   if (!t) return fail("Control test not found");
+  await assertOpen(t.engagementId);
   if (editing && t.status !== "in_progress") return fail("This test has been submitted. Ask the reviewer to send it back to change it.");
   return t;
 }

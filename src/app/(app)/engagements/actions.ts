@@ -9,6 +9,7 @@ import { logAction, nextNumber } from "@/lib/server/audit";
 import { requireUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
 import { insertEngagement } from "@/lib/server/engagements";
+import { assertOpen } from "@/lib/server/lock";
 import { fail, notice } from "@/lib/server/flash";
 import { emailHtml, sendMail } from "@/lib/server/m365";
 import { appUrl } from "@/lib/server/microsoft";
@@ -26,6 +27,7 @@ const date = (f: FormData, k: string) => {
 async function own(orgId: string, id: string) {
   const e = await db.engagement.findFirst({ where: { id, orgId } });
   if (!e) return fail("Engagement not found");
+  await assertOpen(e.id);
   return e;
 }
 
@@ -87,7 +89,8 @@ export async function setPhase(id: string, form: FormData) {
   const phase = z.enum(PHASES.map((p) => p.key) as [string, ...string[]]).parse(form.get("phase"));
   const before = await own(s.org, id);
   await db.$transaction(async (tx) => {
-    await tx.engagement.update({ where: { id }, data: { phase } });
+    // the closing date starts the clock on locking the file and on retention
+    await tx.engagement.update({ where: { id }, data: { phase, ...(phase === "closed" && before.phase !== "closed" ? { closedAt: new Date() } : phase !== "closed" ? { closedAt: null, unlockedUntil: null } : {}) } });
     await logAction(tx, s, "moved engagement", "engagement", id, `to ${phaseLabel(phase)}`);
     // an audit from the plan: closing it completes the plan item and marks the area as audited
     const item = await tx.planItem.findUnique({ where: { engagementId: id } });
@@ -145,6 +148,7 @@ export async function addProcedure(id: string, form: FormData) {
 async function ownProcedure(orgId: string, procId: string) {
   const p = await db.procedure.findFirst({ where: { id: procId, engagement: { orgId } } });
   if (!p) return fail("Procedure not found");
+  await assertOpen(p.engagementId);
   return p;
 }
 
@@ -239,6 +243,7 @@ export async function createRequest(id: string, form: FormData) {
 async function ownRequest(orgId: string, reqId: string) {
   const r = await db.evidenceRequest.findFirst({ where: { id: reqId, engagement: { orgId } } });
   if (!r) return fail("Request not found");
+  await assertOpen(r.engagementId);
   return r;
 }
 
@@ -322,4 +327,33 @@ export async function revokePortalLink(linkId: string) {
     await logAction(tx, s, "revoked auditee portal link", "engagement", l.engagementId, `for ${l.name}`);
   });
   page(l.engagementId);
+}
+
+/** An admin reopens a locked file for a week, with a reason that goes into the audit trail. */
+export async function unlockFile(id: string, form: FormData) {
+  const s = await requireUser("admin");
+  const e = await db.engagement.findFirst({ where: { id, orgId: s.org } });
+  if (!e) return fail("Engagement not found");
+  const reason = z.string().min(5, "Give the reason for unlocking the file").max(500).parse(str(form, "reason") ?? "");
+  const until = new Date(Date.now() + 7 * 864e5);
+  await db.$transaction(async (tx) => {
+    await tx.engagement.update({ where: { id }, data: { unlockedUntil: until } });
+    await logAction(tx, s, "unlocked closed audit file", "engagement", id, `${e.code} until ${until.toISOString().slice(0, 10)}: ${reason}`);
+  });
+  page(id);
+}
+
+/** Legal hold: the audit file is never deleted, whatever the retention period says. */
+export async function setLegalHold(id: string, form: FormData) {
+  const s = await requireUser("admin");
+  const e = await db.engagement.findFirst({ where: { id, orgId: s.org } });
+  if (!e) return fail("Engagement not found");
+  const on = form.get("hold") === "on";
+  const note = str(form, "note");
+  if (on && !note) return fail("Say why the file is on legal hold");
+  await db.$transaction(async (tx) => {
+    await tx.engagement.update({ where: { id }, data: { legalHold: on, legalHoldNote: on ? note : null } });
+    await logAction(tx, s, on ? "put audit file on legal hold" : "released legal hold", "engagement", id, `${e.code}${note ? `: ${note}` : ""}`);
+  });
+  page(id);
 }

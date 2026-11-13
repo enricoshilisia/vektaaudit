@@ -34,6 +34,9 @@ model Organization {
   teamsWebhook   String?
   autoReminders  Boolean   @default(false) // email overdue owners and self-assessment owners automatically
   remindersRanAt DateTime?
+  lockAfterDays  Int       @default(60) // closed audit files lock this many days after closing
+  retentionYears Int       @default(7) // closed audits can be deleted after this many years
+  requireMfa     Boolean   @default(false) // password sign-ins need an authenticator code
   createdAt      DateTime  @default(now())
 
   users         User[]
@@ -57,6 +60,7 @@ model Organization {
   frameworks    Framework[]
   qaReviews     QaReview[]
   conformance   Conformance[]
+  apiKeys       ApiKey[]
   packs         CommitteePack[]
   time          TimeEntry[]
   assignments   Assignment[]
@@ -72,6 +76,10 @@ model User {
   certifications String? // e.g. CIA, CISA, CPA(K)
   weeklyHours    Int       @default(40)
   msObjectId     String? // Entra object id, after signing in with Microsoft
+  totpSecret     String? // authenticator app secret (base32), once confirmed
+  totpEnabledAt  DateTime?
+  recoveryCodes  Json? // bcrypt hashes of unused recovery codes
+  guestUntil     DateTime? // guests (external auditors, regulators) lose access after this
   passwordHash   String
   active         Boolean   @default(true) // deactivated users can't sign in; their history stays
   lastLoginAt    DateTime?
@@ -89,6 +97,7 @@ model User {
   time          TimeEntry[]
   assignments   Assignment[]
   qaReviews     QaReview[]
+  guestAccess   GuestAccess[]
 
   @@unique([orgId, email])
   @@index([email])
@@ -111,6 +120,8 @@ model Client {
   contactEmail String?
   contactPhone String?
   notes        String?
+  country      String?
+  currency     String? // when it differs from the organisation's
   archivedAt   DateTime? // archived clients are hidden from pickers but keep their audits
   createdAt    DateTime  @default(now())
 
@@ -123,18 +134,20 @@ model Client {
 
 /// An invitation to join an organisation. The link carries the token; it works once, until it expires.
 model Invite {
-  id         String    @id @default(cuid())
-  orgId      String
-  email      String
-  name       String?
-  role       String    @default("AUDITOR")
-  title      String?
-  token      String    @unique
-  invitedBy  String
-  expiresAt  DateTime
-  acceptedAt DateTime?
-  revokedAt  DateTime?
-  createdAt  DateTime  @default(now())
+  id            String    @id @default(cuid())
+  orgId         String
+  email         String
+  name          String?
+  role          String    @default("AUDITOR")
+  title         String?
+  token         String    @unique
+  invitedBy     String
+  expiresAt     DateTime
+  acceptedAt    DateTime?
+  revokedAt     DateTime?
+  guestUntil    DateTime? // a guest invitation: access ends on this date
+  engagementIds Json? // and covers only these engagements
+  createdAt     DateTime  @default(now())
 
   org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
@@ -166,6 +179,10 @@ model Engagement {
   tbSource         String?
   rating           String? // satisfactory | needs_improvement | unsatisfactory
   ratedAt          DateTime?
+  closedAt         DateTime? // set when the engagement is closed; the file locks a while after
+  unlockedUntil    DateTime? // an admin reopened a locked file until this time
+  legalHold        Boolean   @default(false) // never deleted while on hold
+  legalHoldNote    String?
   createdAt        DateTime  @default(now())
 
   org         Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -183,6 +200,7 @@ model Engagement {
   tests       ControlTest[]
   dataSets    DataSet[]
   qaReviews   QaReview[]
+  guestAccess GuestAccess[]
   time        TimeEntry[]
   assignments Assignment[]
 
@@ -887,4 +905,32 @@ model Conformance {
   org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@unique([orgId, year])
+}
+
+/// An engagement a guest (external auditor or regulator) may read.
+model GuestAccess {
+  id           String   @id @default(cuid())
+  userId       String
+  engagementId String
+  createdAt    DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  engagement Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, engagementId])
+}
+
+/// A key for the read-only API. Only a hash is stored; the key is shown once.
+model ApiKey {
+  id         String    @id @default(cuid())
+  orgId      String
+  name       String
+  prefix     String // the first characters, to recognise the key
+  hash       String    @unique // SHA-256 of the key
+  createdBy  String
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 }

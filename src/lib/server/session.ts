@@ -4,7 +4,7 @@ import { SignJWT, jwtVerify } from "jose";
 export const SESSION_COOKIE = "va_session";
 export const SESSION_DAYS = 14;
 
-export type RoleName = "ADMIN" | "MANAGER" | "AUDITOR" | "VIEWER";
+export type RoleName = "ADMIN" | "MANAGER" | "AUDITOR" | "VIEWER" | "GUEST";
 
 export interface SessionPayload {
   sub: string; // user id
@@ -12,6 +12,7 @@ export interface SessionPayload {
   role: RoleName;
   name: string;
   email: string;
+  m?: "password" | "microsoft" | "mfa"; // how they signed in: password alone, Microsoft, or password plus an authenticator code
 }
 
 const key = () => {

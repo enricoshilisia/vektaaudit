@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { AuthShell } from "@/components/AuthShell";
 import { db } from "@/lib/server/db";
 import { msConfigured } from "@/lib/server/microsoft";
+import { setPending } from "@/lib/server/mfa";
 import { startSession } from "@/lib/server/signin";
 
 export const metadata: Metadata = { title: "Sign in" };
@@ -20,6 +21,11 @@ async function signIn(form: FormData) {
   // compare even when there is no user, so a wrong email takes as long as a wrong password
   const ok = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
   if (!user || !ok) redirect(`/login?error=1${next ? `&next=${encodeURIComponent(next)}` : ""}`);
+  // two-step sign-in: the password alone doesn't start a session
+  if (user.totpEnabledAt && user.totpSecret) {
+    await setPending(user.id, next);
+    redirect("/login/verify");
+  }
   await startSession(user);
   redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard");
 }
@@ -30,7 +36,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     <AuthShell>
       <form action={signIn} className="flex w-full max-w-sm flex-col gap-4">
         <h2 className="text-2xl font-semibold">Sign in</h2>
-        {error && <p className="rounded-lg bg-high-bg px-3 py-2 text-sm text-high-fg">That email and password don&apos;t match.</p>}
+        {error && <p className="rounded-lg bg-high-bg px-3 py-2 text-sm text-high-fg">{error === "expired" ? "That took too long. Please sign in again." : <>That email and password don&apos;t match.</>}</p>}
         {ms && <p className="rounded-lg bg-high-bg px-3 py-2 text-sm text-high-fg">{ms}</p>}
         {msConfigured() && (
           <>

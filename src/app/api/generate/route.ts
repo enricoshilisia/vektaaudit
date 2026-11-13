@@ -8,6 +8,7 @@ import { OPINIONS, TEMPLATES, type Opinion, type TemplateKey, build, loadContext
 export async function GET(req: NextRequest) {
   const s = await getSession();
   if (!s) return NextResponse.json({ error: "Please sign in" }, { status: 401 });
+  if (s.role === "GUEST") return NextResponse.json({ error: "Not available to guests" }, { status: 403 });
   const p = req.nextUrl.searchParams;
   const t = TEMPLATES.find((x) => x.key === p.get("template"));
   if (!t) return NextResponse.json({ error: "Unknown template" }, { status: 400 });

@@ -12,6 +12,7 @@ const cell = (v: unknown) => {
 export async function GET(req: NextRequest) {
   const s = await getSession();
   if (!s) return NextResponse.json({ error: "Please sign in" }, { status: 401 });
+  if (s.role === "GUEST") return NextResponse.json({ error: "Not available to guests" }, { status: 403 });
   const status = req.nextUrl.searchParams.get("status") ?? "open";
   const findings = await db.finding.findMany({
     where: { orgId: s.org, ...(status === "open" ? { status: { not: "closed" } } : status === "all" ? {} : { status }) },

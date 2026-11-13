@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
   const user = who.email ? await db.user.findFirst({ where: { email: { equals: who.email, mode: "insensitive" }, active: true, org: { msTenantId: who.tid } } }) : null;
   if (!user) return fail(`There's no VektaAudit account for ${who.email || "that Microsoft account"} in an organisation connected to Microsoft 365. Ask your admin to invite you.`);
   if (who.oid && user.msObjectId !== who.oid) await db.user.update({ where: { id: user.id }, data: { msObjectId: who.oid } });
-  await startSession(user, "signed in with Microsoft");
+  await startSession(user, "signed in with Microsoft", "microsoft");
   const res = NextResponse.redirect(`${origin}${state.next || "/dashboard"}`);
   res.cookies.delete({ name: NONCE, path: "/api/microsoft" });
   return res;

@@ -82,7 +82,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                         <Link href={`/clients/${c.id}`} className="font-medium hover:text-brand-700">
                           {c.name}
                         </Link>
-                        <div className="text-[11px] text-ink-500">{c.industry ?? "—"}</div>
+                        <div className="text-[11px] text-ink-500">{[c.industry, c.country, c.currency].filter(Boolean).join(" · ") || "—"}</div>
                       </td>
                       <td className="td">
                         {c.contactName ?? "—"}

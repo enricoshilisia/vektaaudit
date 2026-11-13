@@ -7,6 +7,7 @@ import { logAction } from "@/lib/server/audit";
 import { requireUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
 import { fail } from "@/lib/server/flash";
+import { CURRENCIES } from "@/lib/format";
 
 const opt = (max = 200) =>
   z
@@ -34,6 +35,12 @@ const schema = z.object({
     .transform((v) => v || null),
   contactPhone: opt(40),
   notes: opt(4000),
+  country: opt(60),
+  currency: z
+    .string()
+    .trim()
+    .refine((v) => !v || CURRENCIES.includes(v), "Choose a currency from the list")
+    .transform((v) => v || null),
 });
 
 const read = (form: FormData) => schema.parse(Object.fromEntries(Object.keys(schema.shape).map((k) => [k, String(form.get(k) ?? "")])));

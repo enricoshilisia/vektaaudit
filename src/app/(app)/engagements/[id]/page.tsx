@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import { Avatar, Empty, Pill, SeverityPill, Tabs } from "@/components/ui";
 import { FINDING_PILL, PHASES, RATING_PILL, PROCEDURE_PILL, REQUEST_PILL, SEVERITY, fmtDate, fmtDateTime, fmtSize, isOverdue, phaseIndex } from "@/lib/format";
 import { OPERATING_PILL, TEST_STATUS, countExceptions } from "@/lib/risk";
+import { isLocked, lockDate } from "@/lib/lock";
 import { can, requireUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
 import {
@@ -24,8 +25,10 @@ import {
   revokePortalLink,
   saveConclusion,
   sendBack,
+  setLegalHold,
   setPhase,
   setRating,
+  unlockFile,
 } from "../actions";
 import { createTest } from "../../tests/actions";
 
@@ -61,10 +64,13 @@ export default async function EngagementPage({ params, searchParams }: { params:
   const inReview = e.procedures.filter((p) => p.status === "in_review").length;
   const cur = phaseIndex(e.phase);
   const work = can(s, "work");
+  const org = await db.organization.findUniqueOrThrow({ where: { id: s.org }, select: { lockAfterDays: true } });
+  const locked = isLocked(e, org.lockAfterDays);
+  const locksOn = lockDate(e, org.lockAfterDays);
 
   return (
     <>
-      <header className="-mx-7 -mt-7 flex flex-col gap-3.5 border-b border-line bg-white px-7 pt-5">
+      <header className="-mx-4 -mt-4 flex flex-col gap-3.5 border-b border-line bg-white px-4 pt-5 sm:-mx-7 sm:-mt-7 sm:px-7">
         <div className="flex flex-wrap gap-1.5 text-[13px] text-ink-500">
           <Link href="/engagements" className="hover:text-ink">
             Engagements
@@ -174,6 +180,44 @@ export default async function EngagementPage({ params, searchParams }: { params:
           ]}
         />
       </header>
+
+      {(locked || locksOn || e.legalHold) && (
+        <div className={clsx("flex flex-wrap items-center gap-3 rounded-lg px-4 py-3 text-[13px]", locked ? "bg-line-soft text-ink-700" : "bg-brand-100 text-brand-800")}>
+          <span className="min-w-0 flex-1">
+            {locked
+              ? `This audit file is locked: it closed on ${fmtDate(e.closedAt)} and nothing on it can be changed. Findings can still be followed up.`
+              : e.unlockedUntil && e.unlockedUntil > new Date()
+                ? `Unlocked by an admin until ${fmtDate(e.unlockedUntil)}.`
+                : locksOn
+                  ? `Closed. The file locks on ${fmtDate(locksOn)}; after that nothing on it can be changed.`
+                  : null}
+            {e.legalHold && <strong className="ml-1 font-semibold">On legal hold{e.legalHoldNote ? `: ${e.legalHoldNote}` : ""}. It won't be deleted.</strong>}
+          </span>
+          {locked && can(s, "admin") && (
+            <form action={unlockFile.bind(null, e.id)} className="flex flex-wrap items-center gap-2">
+              <label htmlFor="reason" className="sr-only">
+                Reason for unlocking
+              </label>
+              <input id="reason" name="reason" required minLength={5} className="input h-8 w-64 text-[12px]" placeholder="Reason (kept in the audit trail)" />
+              <button className="btn btn-sm">Unlock for a week</button>
+            </form>
+          )}
+          {can(s, "admin") && e.phase === "closed" && (
+            <form action={setLegalHold.bind(null, e.id)} className="flex flex-wrap items-center gap-2">
+              <input type="hidden" name="hold" value={e.legalHold ? "off" : "on"} />
+              {!e.legalHold && (
+                <>
+                  <label htmlFor="holdNote" className="sr-only">
+                    Reason for legal hold
+                  </label>
+                  <input id="holdNote" name="note" className="input h-8 w-56 text-[12px]" placeholder="Reason for legal hold" />
+                </>
+              )}
+              <button className="btn btn-sm">{e.legalHold ? "Release legal hold" : "Put on legal hold"}</button>
+            </form>
+          )}
+        </div>
+      )}
 
       {tab === "program" && <Program e={e} proc={proc} s={s} done={done} inReview={inReview} />}
       {tab === "notes" && <Notes e={e} s={s} />}

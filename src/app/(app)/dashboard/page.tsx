@@ -2,7 +2,7 @@ import { Check, Lightbulb, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Empty, PageHeader, Pill, Stat } from "@/components/ui";
-import { PHASE_PILL, SEVERITY, clientWord, daysBetween, fmtDate } from "@/lib/format";
+import { PHASE_PILL, RATING_PILL, SEVERITY, clientWord, daysBetween, fmtDate } from "@/lib/format";
 import { can, requireUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
 import { orgInsights } from "@/lib/server/insights";
@@ -246,6 +246,60 @@ export default async function DashboardPage() {
           </div>
         )}
       </section>
+
+      <ByEntity orgId={s.org} kind={org.kind} />
     </>
+  );
+}
+
+/** One row per client or unit: open audits, open and overdue findings, and the latest audit rating. */
+async function ByEntity({ orgId, kind }: { orgId: string; kind: string }) {
+  const now = new Date();
+  const clients = await db.client.findMany({
+    where: { orgId, archivedAt: null },
+    orderBy: { name: "asc" },
+    include: { engagements: { select: { phase: true, rating: true, ratedAt: true, findings: { where: { status: { not: "closed" } }, select: { severity: true, dueDate: true } } } } },
+  });
+  if (clients.length < 2) return null;
+  const rows = clients.map((c) => {
+    const fs = c.engagements.flatMap((e) => e.findings);
+    const rated = c.engagements.filter((e) => e.rating && e.ratedAt).sort((a, b) => b.ratedAt!.getTime() - a.ratedAt!.getTime())[0];
+    return { c, open: c.engagements.filter((e) => e.phase !== "closed").length, findings: fs.length, serious: fs.filter((f) => f.severity === "critical" || f.severity === "high").length, overdue: fs.filter((f) => f.dueDate && f.dueDate < now).length, rating: rated?.rating ?? null };
+  });
+  return (
+    <section className="card overflow-hidden">
+      <h2 className="border-b border-line-soft px-5 py-4 text-base font-semibold">By {clientWord(kind).one.toLowerCase()}</h2>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[720px] text-[13px]">
+          <thead className="bg-[#F8FAFB]">
+            <tr>
+              <th className="th">{clientWord(kind).one}</th>
+              <th className="th text-right">Audits open</th>
+              <th className="th text-right">Open findings</th>
+              <th className="th text-right">Critical or high</th>
+              <th className="th text-right">Overdue</th>
+              <th className="th">Latest rating</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.c.id} className="border-t border-line-soft">
+                <td className="td">
+                  <Link href={`/clients/${r.c.id}`} className="font-medium hover:text-brand-700">
+                    {r.c.name}
+                  </Link>
+                  {(r.c.country || r.c.currency) && <div className="text-[11px] text-ink-500">{[r.c.country, r.c.currency].filter(Boolean).join(" · ")}</div>}
+                </td>
+                <td className="td tabular text-right">{r.open}</td>
+                <td className="td tabular text-right">{r.findings}</td>
+                <td className={`td tabular text-right ${r.serious ? "font-semibold text-high-fg" : ""}`}>{r.serious}</td>
+                <td className={`td tabular text-right ${r.overdue ? "font-semibold text-high-fg" : ""}`}>{r.overdue}</td>
+                <td className="td">{r.rating ? <Pill p={RATING_PILL[r.rating]} /> : <span className="text-ink-400">—</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }

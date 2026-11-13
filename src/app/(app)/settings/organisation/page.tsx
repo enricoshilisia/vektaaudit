@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { CURRENCIES, fmtDate } from "@/lib/format";
 import { requireUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
-import { updateEscalation, updateOrganisation } from "../actions";
+import { updateEscalation, updateGovernance, updateOrganisation } from "../actions";
 
 export const metadata: Metadata = { title: "Organisation" };
 
@@ -39,6 +39,34 @@ export default async function OrganisationPage() {
             ))}
           </select>
         </div>
+        <button className="btn-primary self-start">Save</button>
+      </form>
+      <form id="governance" action={updateGovernance} className="card flex max-w-xl flex-[999_1_420px] flex-col gap-4 p-6">
+        <div>
+          <h2 className="text-[15px] font-semibold">Audit files and sign-in</h2>
+          <p className="mt-1 text-[13px] text-ink-500">Locking keeps closed audit files exactly as they were reported. Retention decides when they may be deleted.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="lockAfterDays" className="label">
+              Lock closed files after (days)
+            </label>
+            <input id="lockAfterDays" name="lockAfterDays" type="number" min={1} max={3650} defaultValue={org.lockAfterDays} className="input" />
+          </div>
+          <div>
+            <label htmlFor="retentionYears" className="label">
+              Keep closed files for (years)
+            </label>
+            <input id="retentionYears" name="retentionYears" type="number" min={1} max={30} defaultValue={org.retentionYears} className="input" />
+          </div>
+        </div>
+        <label className="flex items-start gap-2.5 text-[13px]">
+          <input type="checkbox" name="requireMfa" defaultChecked={org.requireMfa} className="mt-0.5 h-4 w-4" />
+          <span>
+            <span className="font-medium">Require two-step sign-in</span>
+            <span className="block text-ink-500">Everyone who signs in with a password must also enter a code from an authenticator app. People without one are asked to set it up. Signing in with Microsoft uses your Microsoft sign-in rules instead.</span>
+          </span>
+        </label>
         <button className="btn-primary self-start">Save</button>
       </form>
       <form id="escalation" action={updateEscalation} className="card flex max-w-xl flex-[999_1_420px] flex-col gap-4 p-6">

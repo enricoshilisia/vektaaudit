@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
 import { addDocument } from "@/lib/server/documents";
 import { fail } from "@/lib/server/flash";
+import { assertOpen } from "@/lib/server/lock";
 
 const str = (f: FormData, k: string) => {
   const v = String(f.get(k) ?? "").trim();
@@ -18,6 +19,7 @@ export async function uploadDocuments(form: FormData) {
   const s = await requireUser("work");
   const engagementId = str(form, "engagementId");
   if (engagementId && !(await db.engagement.findFirst({ where: { id: engagementId, orgId: s.org } }))) return fail("Engagement not found");
+  await assertOpen(engagementId);
   const folder = folderName.parse(str(form, "folder") ?? "C · Fieldwork");
   const files = form.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
   if (!files.length) return fail("Choose at least one file");
@@ -37,6 +39,7 @@ export async function uploadDocuments(form: FormData) {
 async function own(orgId: string, id: string) {
   const d = await db.document.findFirst({ where: { id, orgId } });
   if (!d) return fail("Document not found");
+  await assertOpen(d.engagementId);
   return d;
 }
 

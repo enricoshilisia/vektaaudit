@@ -1,4 +1,5 @@
 import type { Client } from "@prisma/client";
+import { CURRENCIES } from "@/lib/format";
 
 function Field({ id, label, c, ...rest }: { id: keyof Client; label: string; c?: Client | null } & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
@@ -30,6 +31,23 @@ export function ClientFields({ c, internal }: { c?: Client | null; internal?: bo
             <Field id="law" label="Governing law" c={c} placeholder="the Companies Act, 2015" />
           </>
         )}
+        <Field id="country" label="Country" c={c} placeholder="e.g. Kenya" list="countries" />
+        <div>
+          <label htmlFor="currency" className="label">
+            Reporting currency
+          </label>
+          <select id="currency" name="currency" defaultValue={c?.currency ?? ""} className="input">
+            <option value="">Same as the organisation</option>
+            {CURRENCIES.map((x) => (
+              <option key={x}>{x}</option>
+            ))}
+          </select>
+        </div>
+        <datalist id="countries">
+          {["Kenya", "Uganda", "Tanzania", "Rwanda", "Burundi", "Ethiopia", "South Sudan", "Nigeria", "Ghana", "South Africa", "United Kingdom"].map((x) => (
+            <option key={x} value={x} />
+          ))}
+        </datalist>
         <div className="sm:col-span-2">
           <label htmlFor="address" className="label">
             Address

@@ -28,13 +28,19 @@ async function accept(token: string, form: FormData) {
     // claim the invitation first, so the same link can't make two accounts
     const claimed = await tx.invite.updateMany({ where: { id: i.id, acceptedAt: null }, data: { acceptedAt: new Date() } });
     if (claimed.count !== 1) return null;
-    const u = await tx.user.create({ data: { orgId: i.orgId, email: i.email, name: name.slice(0, 80), title: String(form.get("title") ?? "").trim().slice(0, 80) || i.title, role: i.role, passwordHash } });
+    const u = await tx.user.create({ data: { orgId: i.orgId, email: i.email, name: name.slice(0, 80), title: String(form.get("title") ?? "").trim().slice(0, 80) || i.title, role: i.role, passwordHash, guestUntil: i.role === "GUEST" ? i.guestUntil : null } });
+    // a guest sees only the engagements they were invited to
+    if (i.role === "GUEST") {
+      const ids = ((i.engagementIds as string[] | null) ?? []).filter((x) => typeof x === "string");
+      const own = await tx.engagement.findMany({ where: { orgId: i.orgId, id: { in: ids } }, select: { id: true } });
+      await tx.guestAccess.createMany({ data: own.map((e) => ({ userId: u.id, engagementId: e.id })) });
+    }
     await tx.auditLog.create({ data: { orgId: i.orgId, actorName: u.name, action: "accepted invitation", entity: "user", entityId: u.id, detail: `invited by ${i.invitedBy} as ${i.role}` } });
     return u;
   });
   if (!user) redirect(`/invite/${token}`);
   await startSession(user, "joined");
-  redirect("/dashboard");
+  redirect(user.role === "GUEST" ? "/guest" : "/dashboard");
 }
 
 const ERRORS: Record<string, string> = {

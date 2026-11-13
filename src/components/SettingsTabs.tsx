@@ -11,6 +11,8 @@ export function SettingsTabs({ admin }: { admin: boolean }) {
       ? [
           { key: "organisation", label: "Organisation", href: "/settings/organisation" },
           { key: "microsoft", label: "Microsoft 365", href: "/settings/microsoft" },
+          { key: "retention", label: "Retention", href: "/settings/retention" },
+          { key: "api", label: "API", href: "/settings/api" },
         ]
       : []),
     { key: "profile", label: "Your profile", href: "/settings/profile" },

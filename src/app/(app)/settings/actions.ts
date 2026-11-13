@@ -9,7 +9,13 @@ import { logAction } from "@/lib/server/audit";
 import { requireUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
 import { MIN_PASSWORD, emailTaken } from "@/lib/server/signin";
-import { fail } from "@/lib/server/flash";
+import { fail, notice } from "@/lib/server/flash";
+import { Prisma } from "@prisma/client";
+import { redirect } from "next/navigation";
+import { showCodesOnce } from "@/lib/server/mfa";
+import { newRecoveryCodes, verifyCode } from "@/lib/server/totp";
+import { retentionEnds } from "@/lib/lock";
+import { removeFile } from "@/lib/server/storage";
 
 const role = z.enum(["ADMIN", "MANAGER", "AUDITOR", "VIEWER"]);
 const INVITE_DAYS = 7;
@@ -57,6 +63,7 @@ async function otherAdmins(orgId: string, userId: string) {
 
 export async function setRole(userId: string, form: FormData) {
   const s = await requireUser("admin");
+  if ((await db.user.findFirst({ where: { id: userId, orgId: s.org } }))?.role === "GUEST") return fail("Guests keep their read-only access; invite them as a team member instead");
   const r = role.parse(form.get("role"));
   const u = await db.user.findFirst({ where: { id: userId, orgId: s.org } });
   if (!u) return fail("User not found");
@@ -138,4 +145,115 @@ export async function changePassword(form: FormData) {
     await logAction(tx, s, "changed password", "user", s.sub);
   });
   revalidatePath("/settings/profile");
+}
+
+/** File locking, retention and two-step sign-in rules for the organisation. */
+export async function updateGovernance(form: FormData) {
+  const s = await requireUser("admin");
+  const d = {
+    lockAfterDays: z.coerce.number().int().min(1, "Lock files at least a day after closing").max(3650).parse(form.get("lockAfterDays")),
+    retentionYears: z.coerce.number().int().min(1).max(30).parse(form.get("retentionYears")),
+    requireMfa: form.get("requireMfa") === "on",
+  };
+  await db.$transaction(async (tx) => {
+    await tx.organization.update({ where: { id: s.org }, data: d });
+    await logAction(tx, s, "changed governance settings", "organization", s.org, `lock after ${d.lockAfterDays} days, keep ${d.retentionYears} years, two-step sign-in ${d.requireMfa ? "required" : "optional"}`);
+  });
+  revalidatePath("/settings/organisation");
+}
+
+/** Deletes a closed audit whose retention period has passed: the engagement, everything on it, and its stored files. */
+export async function deleteExpired(engagementId: string, form: FormData) {
+  const s = await requireUser("admin");
+  const [org, e] = await Promise.all([
+    db.organization.findUniqueOrThrow({ where: { id: s.org } }),
+    db.engagement.findFirst({ where: { id: engagementId, orgId: s.org }, include: { documents: { select: { storageKey: true } } } }),
+  ]);
+  if (!e) return fail("Engagement not found");
+  if (e.legalHold) return fail(`${e.code} is on legal hold and can't be deleted`);
+  const ends = retentionEnds(e.closedAt, org.retentionYears);
+  if (e.phase !== "closed" || !ends || ends > new Date()) return fail(`${e.code} is still within its retention period`);
+  if (String(form.get("confirm") ?? "").trim() !== e.code) return fail(`Type ${e.code} to confirm`);
+  await db.$transaction(async (tx) => {
+    await tx.engagement.delete({ where: { id: e.id } });
+    await logAction(tx, s, "deleted audit file after retention", "engagement", null, `${e.code} ${e.name}, closed ${e.closedAt!.toISOString().slice(0, 10)}, ${e.documents.length} documents`);
+  });
+  for (const d of e.documents) await removeFile(d.storageKey).catch(() => {});
+  return notice(`${e.code} and its ${e.documents.length} document${e.documents.length === 1 ? "" : "s"} were deleted`);
+}
+
+/** Invites an external auditor or regulator: read-only, chosen engagements only, until a date. */
+export async function inviteGuest(form: FormData) {
+  const s = await requireUser("admin");
+  const email = z.string().trim().toLowerCase().email("Enter a valid email").parse(form.get("email"));
+  if (await emailTaken(email)) return fail("Someone with that email already has a VektaAudit account");
+  const until = String(form.get("until") ?? "");
+  const guestUntil = /^\d{4}-\d{2}-\d{2}$/.test(until) ? new Date(`${until}T23:59:59`) : null;
+  if (!guestUntil || guestUntil < new Date()) return fail("Choose the date their access ends");
+  if (guestUntil.getTime() - Date.now() > 366 * 864e5) return fail("Guest access can last up to a year");
+  const ids = form.getAll("engagements").map(String);
+  const engagements = await db.engagement.findMany({ where: { orgId: s.org, id: { in: ids } }, select: { id: true, code: true } });
+  if (!engagements.length) return fail("Choose the engagements they may see");
+  await db.$transaction(async (tx) => {
+    const i = await tx.invite.create({
+      data: {
+        orgId: s.org,
+        email,
+        role: "GUEST",
+        name: String(form.get("name") ?? "").trim().slice(0, 80) || null,
+        title: String(form.get("title") ?? "").trim().slice(0, 80) || null,
+        token: randomBytes(24).toString("base64url"),
+        invitedBy: s.name,
+        expiresAt: new Date(Date.now() + INVITE_DAYS * 86400000),
+        guestUntil,
+        engagementIds: engagements.map((e) => e.id),
+      },
+    });
+    await logAction(tx, s, "invited guest", "invite", i.id, `${email} until ${until}: ${engagements.map((e) => e.code).join(", ")}`);
+  });
+  revalidatePath("/settings/team");
+}
+
+export async function setGuestUntil(userId: string, form: FormData) {
+  const s = await requireUser("admin");
+  const u = await db.user.findFirst({ where: { id: userId, orgId: s.org, role: "GUEST" } });
+  if (!u) return fail("Guest not found");
+  const until = String(form.get("until") ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(until)) return fail("Choose a date");
+  const guestUntil = new Date(`${until}T23:59:59`);
+  if (guestUntil.getTime() - Date.now() > 366 * 864e5) return fail("Guest access can last up to a year");
+  await db.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: userId }, data: { guestUntil } });
+    await logAction(tx, s, "changed guest access", "user", userId, `${u.email} until ${until}`);
+  });
+  revalidatePath("/settings/team");
+}
+
+/** Turns two-step sign-in off (not allowed when the organisation requires it). */
+export async function disableMfa(form: FormData) {
+  const s = await requireUser();
+  const u = await db.user.findUniqueOrThrow({ where: { id: s.sub }, include: { org: { select: { requireMfa: true } } } });
+  if (u.org.requireMfa) return fail("Your organisation requires two-step sign-in");
+  if (!u.totpSecret || !u.totpEnabledAt) return fail("Two-step sign-in is already off");
+  if (!verifyCode(u.totpSecret, String(form.get("code") ?? ""))) return fail("That code didn't work");
+  await db.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: u.id }, data: { totpSecret: null, totpEnabledAt: null, recoveryCodes: Prisma.DbNull } });
+    await logAction(tx, s, "turned off two-step sign-in", "user", u.id);
+  });
+  revalidatePath("/settings/profile");
+}
+
+/** Replaces the recovery codes; the new ones are shown once. */
+export async function newCodes(form: FormData) {
+  const s = await requireUser();
+  const u = await db.user.findUniqueOrThrow({ where: { id: s.sub } });
+  if (!u.totpSecret || !u.totpEnabledAt) return fail("Turn on two-step sign-in first");
+  if (!verifyCode(u.totpSecret, String(form.get("code") ?? ""))) return fail("That code didn't work");
+  const { codes, hashes } = await newRecoveryCodes();
+  await db.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: u.id }, data: { recoveryCodes: hashes } });
+    await logAction(tx, s, "made new recovery codes", "user", u.id);
+  });
+  await showCodesOnce(codes);
+  redirect("/setup-mfa?done=1");
 }

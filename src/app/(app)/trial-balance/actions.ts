@@ -7,10 +7,12 @@ import { logAction } from "@/lib/server/audit";
 import { requireUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
 import { fail } from "@/lib/server/flash";
+import { assertOpen } from "@/lib/server/lock";
 
 async function own(orgId: string, id: string) {
   const e = await db.engagement.findFirst({ where: { id, orgId, kind: "financial" } });
   if (!e) return fail("Financial-audit engagement not found");
+  await assertOpen(e.id);
   return e;
 }
 
@@ -70,6 +72,7 @@ export async function updateLead(leadId: string, form: FormData) {
   const s = await requireUser("work");
   const l = await db.leadSchedule.findFirst({ where: { id: leadId, engagement: { orgId: s.org } } });
   if (!l) return fail("Lead schedule not found");
+  await assertOpen(l.engagementId);
   const risk = z.enum(["normal", "elevated", "significant"]).parse(form.get("risk"));
   const status = z.enum(["not_started", "testing", "in_review", "signed_off"]).parse(form.get("status"));
   await db.$transaction(async (tx) => {

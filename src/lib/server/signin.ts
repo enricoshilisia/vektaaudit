@@ -7,8 +7,8 @@ import { SESSION_COOKIE, SESSION_DAYS, signSession, type RoleName } from "./sess
 export const MIN_PASSWORD = 10;
 
 /** Sets the session cookie and records the sign-in. */
-export async function startSession(user: User, how = "signed in") {
-  const token = await signSession({ sub: user.id, org: user.orgId, role: user.role as RoleName, name: user.name, email: user.email });
+export async function startSession(user: User, how = "signed in", method: "password" | "microsoft" | "mfa" = "password") {
+  const token = await signSession({ sub: user.id, org: user.orgId, role: user.role as RoleName, name: user.name, email: user.email, m: method });
   (await cookies()).set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",

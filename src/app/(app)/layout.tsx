@@ -1,5 +1,6 @@
 import { Search } from "lucide-react";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { RAIL_COOKIE } from "@/lib/format";
 import { can, requireUser } from "@/lib/server/auth";
@@ -22,6 +23,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ]);
   const mine = [...recent.filter((e) => e.leadId === s.sub), ...recent.filter((e) => e.leadId !== s.sub)].slice(0, 3);
   const rail = (await cookies()).get(RAIL_COOKIE)?.value === "1";
+  // two-step sign-in, when the organisation requires it (Microsoft sign-ins follow Microsoft's own rules)
+  if (org.requireMfa && s.m !== "mfa" && s.m !== "microsoft") redirect("/setup-mfa");
 
   return (
     <div className="min-h-screen lg:flex">

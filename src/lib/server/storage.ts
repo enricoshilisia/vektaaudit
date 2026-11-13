@@ -1,6 +1,6 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const root = () => path.resolve(process.env.STORAGE_DIR || path.join(process.cwd(), "storage"));
@@ -40,4 +40,11 @@ export async function getFile(key: string) {
   const full = path.join(root(), key);
   if (!full.startsWith(root() + path.sep)) throw new Error("Bad storage key");
   return readFile(full);
+}
+
+/** Deletes a stored file (retention). Missing files are ignored. */
+export async function removeFile(key: string) {
+  const full = path.join(root(), key);
+  if (!full.startsWith(root() + path.sep)) throw new Error("Bad storage key");
+  await rm(full, { force: true });
 }

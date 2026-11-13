@@ -9,6 +9,7 @@ import { renderPdf } from "@/lib/server/render";
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const s = await getSession();
   if (!s) return NextResponse.json({ error: "Please sign in" }, { status: 401 });
+  if (s.role === "GUEST") return NextResponse.json({ error: "Not available to guests" }, { status: 403 });
   const p = await db.committeePack.findFirst({ where: { id: (await params).id, orgId: s.org }, include: { org: { select: { name: true } } } });
   if (!p) return NextResponse.json({ error: "Pack not found" }, { status: 404 });
   const issued = p.status === "issued" && p.snapshot ? { at: p.issuedAt!, by: p.issuedBy ?? "" } : null;

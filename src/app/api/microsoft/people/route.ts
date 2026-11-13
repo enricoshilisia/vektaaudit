@@ -7,6 +7,7 @@ import { searchPeople } from "@/lib/server/microsoft";
 export async function GET(req: NextRequest) {
   const s = await getSession();
   if (!s) return NextResponse.json({ error: "Please sign in" }, { status: 401 });
+  if (s.role === "GUEST") return NextResponse.json({ error: "Not available to guests" }, { status: 403 });
   const org = await db.organization.findUnique({ where: { id: s.org }, select: { msTenantId: true } });
   if (!org?.msTenantId) return NextResponse.json({ people: [], connected: false });
   try {

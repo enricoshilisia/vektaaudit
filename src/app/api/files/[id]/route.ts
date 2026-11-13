@@ -8,6 +8,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!s) return NextResponse.json({ error: "Please sign in" }, { status: 401 });
   const d = await db.document.findFirst({ where: { id: (await params).id, orgId: s.org } });
   if (!d) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (s.role === "GUEST" && !(d.engagementId && (await db.guestAccess.findFirst({ where: { userId: s.sub, engagementId: d.engagementId } })))) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const bytes = await getFile(d.storageKey);
   await db.auditLog.create({ data: { orgId: s.org, actorName: s.name, action: "downloaded document", entity: "document", entityId: d.id, detail: `${d.name} v${d.version}` } });
   const inline = req.nextUrl.searchParams.get("inline") === "1" && /^(application\/pdf|image\/)/.test(d.mime);
