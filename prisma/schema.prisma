@@ -1,0 +1,521 @@
+// VektaAudit: audit management for internal audit teams and audit firms.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// An audit function: an internal audit department or an audit firm.
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  kind      String   @default("internal") // internal | firm
+  currency  String   @default("KES")
+  createdAt DateTime @default(now())
+
+  users       User[]
+  clients     Client[]
+  engagements Engagement[]
+  findings    Finding[]
+  documents   Document[]
+  auditLogs   AuditLog[]
+  counters    Counter[]
+  invites     Invite[]
+  entities    AuditableEntity[]
+  plans       AuditPlan[]
+  risks       Risk[]
+  controls    Control[]
+  tests       ControlTest[]
+}
+
+model User {
+  id           String    @id @default(cuid())
+  orgId        String
+  email        String
+  name         String
+  title        String?
+  role         String    @default("AUDITOR") // ADMIN | MANAGER | AUDITOR | VIEWER
+  passwordHash String
+  active       Boolean   @default(true) // deactivated users can't sign in; their history stays
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  org           Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  leads         Engagement[]  @relation("lead")
+  prepared      Procedure[]   @relation("preparer")
+  reviewed      Procedure[]   @relation("reviewer")
+  reviewNotes   ReviewNote[]
+  raised        Finding[]     @relation("raisedBy")
+  planItems     PlanItem[]
+  testsPrepared ControlTest[] @relation("testPreparer")
+  testsReviewed ControlTest[] @relation("testReviewer")
+
+  @@unique([orgId, email])
+  @@index([email])
+}
+
+/// The entity being audited (a company for an audit firm; a department or subsidiary for internal audit).
+model Client {
+  id           String    @id @default(cuid())
+  orgId        String
+  name         String
+  industry     String?
+  yearEnd      String? // e.g. "30 June"
+  framework    String? // e.g. IFRS Accounting Standards
+  law          String? // e.g. Companies Act, 2015
+  regNumber    String? // company registration number
+  taxId        String? // e.g. KRA PIN
+  address      String?
+  contactName  String?
+  contactTitle String?
+  contactEmail String?
+  contactPhone String?
+  notes        String?
+  archivedAt   DateTime? // archived clients are hidden from pickers but keep their audits
+  createdAt    DateTime  @default(now())
+
+  org         Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  engagements Engagement[]
+  entities    AuditableEntity[]
+
+  @@index([orgId])
+}
+
+/// An invitation to join an organisation. The link carries the token; it works once, until it expires.
+model Invite {
+  id         String    @id @default(cuid())
+  orgId      String
+  email      String
+  name       String?
+  role       String    @default("AUDITOR")
+  title      String?
+  token      String    @unique
+  invitedBy  String
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+model Engagement {
+  id               String    @id @default(cuid())
+  orgId            String
+  clientId         String?
+  code             String // ENG-2027-014
+  name             String
+  area             String? // Finance, Technology...
+  kind             String    @default("internal") // internal | financial
+  phase            String    @default("planning") // planning | risk | fieldwork | review | reporting | followup | closed
+  objective        String?
+  leadId           String?
+  periodStart      DateTime?
+  periodEnd        DateTime?
+  dueDate          DateTime?
+  budgetHours      Int       @default(0)
+  actualHours      Int       @default(0)
+  // financial audits: materiality, whole currency units
+  materialityBasis String?
+  materiality      BigInt?
+  performanceMat   BigInt?
+  trivialMat       BigInt?
+  tbImportedAt     DateTime?
+  tbSource         String?
+  createdAt        DateTime  @default(now())
+
+  org         Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  client      Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  lead        User?             @relation("lead", fields: [leadId], references: [id], onDelete: SetNull)
+  procedures  Procedure[]
+  reviewNotes ReviewNote[]
+  findings    Finding[]
+  requests    EvidenceRequest[]
+  portalLinks PortalLink[]
+  documents   Document[]
+  leadsTb     LeadSchedule[]
+  tbLines     TbLine[]
+  planItem    PlanItem?
+  tests       ControlTest[]
+
+  @@unique([orgId, code])
+  @@index([orgId, phase])
+}
+
+/// A step of the work program: a test the auditor performs, prepared then reviewed.
+model Procedure {
+  id           String    @id @default(cuid())
+  engagementId String
+  ref          String // P-04
+  title        String
+  control      String? // the control or assertion it tests
+  status       String    @default("not_started") // not_started | in_progress | in_review | signed_off
+  conclusion   String?
+  preparedById String?
+  preparedAt   DateTime?
+  reviewedById String?
+  reviewedAt   DateTime?
+  sort         Int       @default(0)
+  createdAt    DateTime  @default(now())
+
+  engagement Engagement   @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  preparedBy User?        @relation("preparer", fields: [preparedById], references: [id], onDelete: SetNull)
+  reviewedBy User?        @relation("reviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  notes      ReviewNote[]
+
+  @@index([engagementId, sort])
+}
+
+/// Reviewer ↔ preparer conversation on the file. A note is open until resolved.
+model ReviewNote {
+  id           String    @id @default(cuid())
+  engagementId String
+  procedureId  String?
+  authorId     String
+  body         String
+  resolvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  engagement Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  procedure  Procedure? @relation(fields: [procedureId], references: [id], onDelete: SetNull)
+  author     User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([engagementId, createdAt])
+}
+
+/// An issue raised by the audit, written up in the condition / criteria / cause / effect / recommendation format.
+model Finding {
+  id             String    @id @default(cuid())
+  orgId          String
+  engagementId   String
+  code           String // FND-0412
+  title          String
+  severity       String    @default("medium") // high | medium | low
+  status         String    @default("awaiting_response") // awaiting_response | in_remediation | pending_validation | closed
+  condition      String?
+  criteria       String?
+  cause          String?
+  effect         String?
+  recommendation String?
+  mgmtResponse   String?
+  ownerName      String?
+  ownerEmail     String?
+  dueDate        DateTime?
+  repeat         Boolean   @default(false)
+  raisedById     String?
+  closedAt       DateTime?
+  createdAt      DateTime  @default(now())
+
+  org        Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  engagement Engagement     @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  raisedBy   User?          @relation("raisedBy", fields: [raisedById], references: [id], onDelete: SetNull)
+  events     FindingEvent[]
+
+  @@unique([orgId, code])
+  @@index([orgId, status])
+}
+
+model FindingEvent {
+  id        String   @id @default(cuid())
+  findingId String
+  kind      String // raised | response | status | evidence | reminder | comment
+  body      String
+  actorName String
+  createdAt DateTime @default(now())
+
+  finding Finding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  @@index([findingId, createdAt])
+}
+
+/// A "provided by client" request: something the auditee must send.
+model EvidenceRequest {
+  id           String    @id @default(cuid())
+  engagementId String
+  code         String // PBC-07
+  title        String
+  detail       String?
+  dueDate      DateTime?
+  status       String    @default("open") // open | submitted | needs_info | accepted
+  assigneeName String?
+  auditorNote  String? // what the auditor asked for when sending it back
+  clientNote   String? // the auditee's note on their last upload
+  submittedAt  DateTime?
+  acceptedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  engagement Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  documents  Document[]
+
+  @@unique([engagementId, code])
+}
+
+/// A link the auditee uses to answer requests without an account.
+model PortalLink {
+  id           String    @id @default(cuid())
+  engagementId String
+  token        String    @unique
+  name         String
+  email        String?
+  title        String?
+  revokedAt    DateTime?
+  lastSeenAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  engagement Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+}
+
+/// A file on the audit file. Uploading the same name to the same folder adds a version.
+model Document {
+  id           String   @id @default(cuid())
+  orgId        String
+  engagementId String?
+  requestId    String?
+  folder       String   @default("C · Fieldwork")
+  name         String
+  ext          String
+  mime         String
+  size         Int
+  storageKey   String
+  version      Int      @default(1)
+  linkRef      String? // the working-paper or procedure reference it supports, e.g. C1.3
+  source       String   @default("auditor") // auditor | client | generated
+  status       String   @default("uploaded") // uploaded | reviewed | client_upload
+  template     String? // generated documents: the template key
+  uploadedBy   String
+  createdAt    DateTime @default(now())
+
+  org        Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  engagement Engagement?      @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  request    EvidenceRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, engagementId, folder])
+}
+
+/// A lead schedule: one line of the financial statements, built from trial-balance accounts.
+model LeadSchedule {
+  id           String @id @default(cuid())
+  engagementId String
+  code         String // A, B, C...
+  name         String
+  section      String @default("bs") // bs (financial position) | is (profit or loss)
+  risk         String @default("normal") // normal | elevated | significant
+  status       String @default("not_started") // not_started | testing | in_review | signed_off
+  sort         Int    @default(0)
+
+  engagement Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+
+  @@unique([engagementId, code])
+}
+
+/// A trial-balance account. Debits positive, credits negative, whole currency units.
+model TbLine {
+  id           String  @id @default(cuid())
+  engagementId String
+  account      String
+  name         String
+  leadCode     String?
+  prior        BigInt  @default(0)
+  current      BigInt  @default(0)
+
+  engagement Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+
+  @@unique([engagementId, account])
+}
+
+/// Who did what, when. Written for every change; never edited.
+model AuditLog {
+  id        String   @id @default(cuid())
+  orgId     String
+  actorName String
+  action    String
+  entity    String
+  entityId  String?
+  detail    String?
+  createdAt DateTime @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt])
+}
+
+model Counter {
+  orgId String
+  key   String
+  value Int    @default(0)
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, key])
+}
+
+/// Something the audit function could audit (a process, function, system or location), scored for inherent risk.
+/// Together these make up the audit universe that the annual plan is built from.
+model AuditableEntity {
+  id            String    @id @default(cuid())
+  orgId         String
+  clientId      String? // the client or unit it belongs to
+  code          String // AU-014
+  name          String
+  category      String? // Finance, Operations, Technology...
+  owner         String?
+  impact        Int       @default(3) // 1–5
+  likelihood    Int       @default(3) // 1–5
+  controlEnv    String    @default("adequate") // strong | adequate | needs_improvement | weak
+  cycleMonths   Int       @default(24) // audit at least this often
+  lastAuditedAt DateTime?
+  notes         String?
+  archivedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  client    Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  planItems PlanItem[]
+
+  @@unique([orgId, code])
+  @@index([orgId])
+}
+
+/// The audit plan for a year: drafted, submitted, then approved (normally by the audit committee).
+model AuditPlan {
+  id            String    @id @default(cuid())
+  orgId         String
+  year          Int
+  capacityHours Int       @default(0)
+  status        String    @default("draft") // draft | submitted | approved
+  submittedAt   DateTime?
+  approvedAt    DateTime?
+  approvedBy    String? // e.g. "Audit Committee, meeting of 12 Feb 2027"
+  createdAt     DateTime  @default(now())
+
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  items PlanItem[]
+
+  @@unique([orgId, year])
+}
+
+/// One planned audit. Starting it creates the engagement.
+model PlanItem {
+  id           String   @id @default(cuid())
+  planId       String
+  entityId     String?
+  title        String
+  kind         String   @default("assurance") // assurance | it | compliance | advisory | followup
+  leadId       String?
+  hours        Int      @default(0)
+  startMonth   Int      @default(1) // 1–12
+  endMonth     Int      @default(1)
+  status       String   @default("planned") // planned | in_progress | completed | deferred | cancelled
+  note         String? // why it was deferred or cancelled
+  engagementId String?  @unique
+  createdAt    DateTime @default(now())
+
+  plan       AuditPlan        @relation(fields: [planId], references: [id], onDelete: Cascade)
+  entity     AuditableEntity? @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  lead       User?            @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  engagement Engagement?      @relation(fields: [engagementId], references: [id], onDelete: SetNull)
+
+  @@index([planId, startMonth])
+}
+
+/// A risk in the library: what could go wrong in a process.
+model Risk {
+  id        String   @id @default(cuid())
+  orgId     String
+  code      String // R-012
+  process   String
+  title     String
+  detail    String?
+  rating    String   @default("medium") // critical | high | medium | low
+  createdAt DateTime @default(now())
+
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  controls Control[]
+
+  @@unique([orgId, code])
+}
+
+/// A control in the library, mapped to the risks it addresses. Test results update its ratings.
+model Control {
+  id           String    @id @default(cuid())
+  orgId        String
+  code         String // C-031
+  process      String
+  title        String
+  detail       String?
+  type         String    @default("preventive") // preventive | detective
+  nature       String    @default("manual") // manual | automated | it_dependent
+  frequency    String    @default("monthly") // per_transaction | multiple_daily | daily | weekly | monthly | quarterly | annual | continuous
+  key          Boolean   @default(true)
+  ownerName    String?
+  assertion    String?
+  component    String? // COSO component
+  design       String    @default("not_assessed") // not_assessed | effective | needs_improvement | ineffective
+  operating    String    @default("not_tested") // not_tested | effective | effective_exception | ineffective
+  lastTestedAt DateTime?
+  createdAt    DateTime  @default(now())
+
+  org   Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  risks Risk[]
+  tests ControlTest[]
+
+  @@unique([orgId, code])
+}
+
+/// A test of one control on an engagement: the workpaper, with sampling, attributes and results.
+model ControlTest {
+  id               String    @id @default(cuid())
+  orgId            String
+  engagementId     String
+  controlId        String
+  ref              String // CT-03
+  testType         String    @default("operating") // design | operating
+  periodStart      DateTime?
+  periodEnd        DateTime?
+  population       Int?
+  populationValue  BigInt?
+  populationSource String?
+  method           String    @default("random") // random | systematic | haphazard | judgemental | full
+  confidence       Int       @default(90) // %
+  tolerableRate    Int       @default(5) // %
+  attributes       Json      @default("[]") // [{ key, label, how }]
+  status           String    @default("in_progress") // in_progress | in_review | concluded
+  result           String? // effective | effective_exception | ineffective
+  conclusion       String?
+  preparedById     String?
+  preparedAt       DateTime?
+  reviewedById     String?
+  reviewedAt       DateTime?
+  createdAt        DateTime  @default(now())
+
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  engagement Engagement   @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  control    Control      @relation(fields: [controlId], references: [id], onDelete: Cascade)
+  preparedBy User?        @relation("testPreparer", fields: [preparedById], references: [id], onDelete: SetNull)
+  reviewedBy User?        @relation("testReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  samples    TestSample[]
+
+  @@unique([engagementId, ref])
+}
+
+/// One item in a control test's sample. results maps attribute key to "pass" | "fail" | "na".
+model TestSample {
+  id          String  @id @default(cuid())
+  testId      String
+  idx         Int
+  ref         String
+  description String?
+  amount      BigInt?
+  results     Json    @default("{}")
+  comment     String?
+
+  test ControlTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@index([testId, idx])
+}

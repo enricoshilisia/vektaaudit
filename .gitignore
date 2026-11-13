@@ -1,0 +1,12 @@
+node_modules
+.next
+out
+*.tsbuildinfo
+next-env.d.ts
+
+# secrets: every .env variant, incl. backups
+.env*
+!.env.example
+
+# uploaded evidence and generated documents
+/storage/
