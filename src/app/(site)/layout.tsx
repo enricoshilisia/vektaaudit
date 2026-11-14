@@ -68,7 +68,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
               <Logo />
               <span className="text-[17px] font-bold text-white">VektaAudit</span>
             </div>
-            <p className="mt-4 max-w-xs text-sm leading-relaxed text-navy-300">Audit management for audit firms and internal audit teams: one file from planning to the final report.</p>
+            <p className="mt-4 max-w-xs text-sm leading-relaxed text-navy-300">Audit management for internal audit teams and audit firms: risk-based audit across the whole organisation.</p>
           </div>
           <FooterCol title="Product" links={[["/features", "Features"], ["/#how", "How it works"], ["/security", "Security"]]} />
           <FooterCol title="For" links={[["/#who", "Audit firms"], ["/#who", "Internal audit"], ["/#who", "Audit committees"]]} />

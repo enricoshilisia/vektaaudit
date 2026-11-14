@@ -1,6 +1,7 @@
 import { Mail, Phone, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { typeLabel } from "@/lib/auditTypes";
 import { notFound } from "next/navigation";
 import { ClientFields } from "@/components/ClientFields";
 import { Empty, Pill } from "@/components/ui";
@@ -90,7 +91,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                           {e.name}
                         </Link>
                         <div className="font-mono text-[11px] text-ink-500">
-                          {e.code} · {e.kind === "financial" ? "Financial" : "Internal"}
+                          {e.code} · {typeLabel(e)}
                         </div>
                       </td>
                       <td className="td">

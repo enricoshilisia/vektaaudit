@@ -10,7 +10,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const s = await requireUser();
   const now = new Date();
   const open = { in: ["open", "needs_info"] };
-  const [org, user, engagements, requests, requestsLate, findings, findingsLate, recent] = await Promise.all([
+  const [org, user, engagements, requests, requestsLate, findings, findingsLate, recent, financial] = await Promise.all([
     db.organization.findUniqueOrThrow({ where: { id: s.org } }),
     db.user.findUniqueOrThrow({ where: { id: s.sub } }),
     db.engagement.count({ where: { orgId: s.org, phase: { not: "closed" } } }),
@@ -20,6 +20,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     db.finding.count({ where: { orgId: s.org, status: { not: "closed" }, dueDate: { lt: now } } }),
     // the engagements this person leads first, then the soonest due
     db.engagement.findMany({ where: { orgId: s.org, phase: { not: "closed" } }, orderBy: [{ dueDate: "asc" }], take: 12, select: { id: true, code: true, name: true, phase: true, leadId: true, client: { select: { name: true } } } }),
+    db.engagement.count({ where: { orgId: s.org, kind: "financial" } }),
   ]);
   const mine = [...recent.filter((e) => e.leadId === s.sub), ...recent.filter((e) => e.leadId !== s.sub)].slice(0, 3);
   const rail = (await cookies()).get(RAIL_COOKIE)?.value === "1";
@@ -36,6 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         late={{ requests: requestsLate > 0, findings: findingsLate > 0 }}
         recent={mine.map((e) => ({ id: e.id, code: e.code, name: e.name, phase: e.phase, client: e.client?.name ?? null }))}
         canCreate={can(s, "manage")}
+        financial={financial > 0}
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex flex-wrap items-center gap-3 border-b border-line bg-white px-4 py-3 sm:px-7">

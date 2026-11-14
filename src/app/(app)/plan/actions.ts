@@ -8,6 +8,7 @@ import { logAction } from "@/lib/server/audit";
 import { requireUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
 import { insertEngagement } from "@/lib/server/engagements";
+import { TYPE_FOR_PLAN } from "@/lib/auditTypes";
 import { fail } from "@/lib/server/flash";
 import { notifyTeams } from "@/lib/server/m365";
 
@@ -159,11 +160,11 @@ export async function startItem(itemId: string) {
   if (it.engagementId) redirect(`/engagements/${it.engagementId}`);
   if (it.status !== "planned") return fail("Restore this audit to the plan before starting it");
   const entity = it.entityId ? await db.auditableEntity.findUnique({ where: { id: it.entityId } }) : null;
-  const org = await db.organization.findUniqueOrThrow({ where: { id: s.org }, select: { kind: true } });
   const e = await db.$transaction(async (tx) => {
     const created = await insertEngagement(tx, s.org, {
       name: it.title,
-      kind: org.kind === "firm" ? "financial" : "internal",
+      kind: "internal",
+      auditType: TYPE_FOR_PLAN[it.kind] ?? "operational",
       area: entity?.category ?? null,
       clientId: entity?.clientId ?? null,
       leadId: it.leadId,

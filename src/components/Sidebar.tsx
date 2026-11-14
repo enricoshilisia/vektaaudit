@@ -38,7 +38,7 @@ import { useEffect, useState } from "react";
 import { RAIL_COOKIE, clientWord, initials } from "@/lib/format";
 
 type CountKey = "engagements" | "requests" | "findings";
-type Item = { href: string; label: string; icon: LucideIcon; count?: CountKey };
+type Item = { href: string; label: string; icon: LucideIcon; count?: CountKey; financial?: boolean };
 
 const GROUPS: { title: string; items: Item[] }[] = [
   {
@@ -66,7 +66,6 @@ const GROUPS: { title: string; items: Item[] }[] = [
   {
     title: "Fieldwork",
     items: [
-      { href: "/trial-balance", label: "Trial balance", icon: Table2 },
       { href: "/documents", label: "Documents", icon: FolderOpen },
       {
         href: "/requests",
@@ -81,6 +80,7 @@ const GROUPS: { title: string; items: Item[] }[] = [
         count: "findings",
       },
       { href: "/self-assessment", label: "Self-assessment", icon: ListChecks },
+      { href: "/trial-balance", label: "Trial balance", icon: Table2, financial: true },
     ],
   },
   {
@@ -140,6 +140,7 @@ type Props = {
     client: string | null;
   }[];
   canCreate: boolean;
+  financial: boolean; // runs financial statement audits
 };
 
 function Mark({ size = 30 }: { size?: number }) {
@@ -307,7 +308,7 @@ function Nav({
                 {g.title}
               </span>
             )}
-            {g.items.map(link)}
+            {g.items.filter((it) => !it.financial || p.financial).map(link)}
           </div>
         ))}
 

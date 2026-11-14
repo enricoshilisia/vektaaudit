@@ -33,6 +33,7 @@ import {
 import { createTest } from "../../tests/actions";
 import { loadProgram, saveProgram } from "../../programs/actions";
 import { PROGRAMS } from "@/lib/programs";
+import { auditTypeOf, typeLabel } from "@/lib/auditTypes";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const e = await db.engagement.findUnique({ where: { id: (await params).id }, select: { name: true } });
@@ -84,6 +85,7 @@ export default async function EngagementPage({ params, searchParams }: { params:
           <div className="flex flex-col gap-1.5">
             <h1 className="text-2xl font-semibold">{e.name}</h1>
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-ink-500">
+              <span className="pill bg-line-soft text-ink-700">{typeLabel(e)}</span>
               {e.client && <span>{e.client.name}</span>}
               <span>
                 Lead: <strong className="font-medium text-ink">{e.lead?.name ?? "—"}</strong>
@@ -755,6 +757,7 @@ async function TestsTab({ e, s }: { e: E; s: S }) {
 /** Load a standard or saved work program into the engagement, or save its procedures as a program. */
 async function ProgramLibrary({ e, s }: { e: E; s: S }) {
   const own = await db.programTemplate.findMany({ where: { orgId: s.org }, orderBy: { name: "asc" }, select: { id: true, name: true } });
+  const suggested = PROGRAMS.filter((p) => auditTypeOf(e.auditType)?.programs.includes(p.key));
   return (
     <section className="card flex flex-wrap items-end gap-x-6 gap-y-4 p-5">
       <form action={loadProgram.bind(null, e.id)} className="flex min-w-0 flex-[2_1_380px] flex-wrap items-end gap-2">
@@ -775,8 +778,17 @@ async function ProgramLibrary({ e, s }: { e: E; s: S }) {
                 ))}
               </optgroup>
             )}
-            <optgroup label="Standard programs">
-              {PROGRAMS.map((p) => (
+            {suggested.length > 0 && (
+              <optgroup label="Suggested for this type of audit">
+                {suggested.map((p) => (
+                  <option key={p.key} value={`builtin:${p.key}`}>
+                    {p.name} ({p.steps.length} procedures)
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            <optgroup label={suggested.length ? "Other standard programs" : "Standard programs"}>
+              {PROGRAMS.filter((p) => !suggested.includes(p)).map((p) => (
                 <option key={p.key} value={`builtin:${p.key}`}>
                   {p.name} ({p.steps.length} procedures)
                 </option>

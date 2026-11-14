@@ -165,6 +165,7 @@ model Engagement {
   name             String
   area             String? // Finance, Technology...
   kind             String    @default("internal") // internal | financial
+  auditType        String? // operational | financial_controls | it | compliance | governance | performance | investigation | advisory | followup | statutory
   phase            String    @default("planning") // planning | risk | fieldwork | review | reporting | followup | closed
   objective        String?
   leadId           String?

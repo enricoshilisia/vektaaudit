@@ -1,29 +1,40 @@
-import { ArrowRight, Building2, ClipboardCheck, FileSignature, FileStack, Landmark, ListChecks, MessageSquareWarning, ScrollText, ShieldCheck, Users } from "lucide-react";
+import { ArrowRight, BarChart3, Building2, ClipboardCheck, Cpu, Gavel, Globe, Landmark, Leaf, ListChecks, MessageSquareWarning, Presentation, Scale, Search, Settings2, ShieldCheck, Sparkles, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CtaBand, SectionHead, Ticks } from "@/components/Site";
 import { getSession } from "@/lib/server/auth";
 
 export const metadata: Metadata = {
-  title: { absolute: "VektaAudit · Audit management for firms and internal audit" },
-  description: "Plan, test, review and report on one audit file. Work programs with sign-off, evidence requests, findings tracking, trial balance and generated reports.",
+  title: { absolute: "VektaAudit · Audit management for internal audit and audit firms" },
+  description: "Risk-based audit across the whole organisation: audit universe and plan, controls testing, data analytics, IT and compliance audits, findings follow-up and audit committee reporting.",
 };
 
 const STEPS = [
-  { n: "01", title: "Plan", text: "Open an engagement for a client, set the scope, lead, dates and materiality, and load a work program." },
+  { n: "01", title: "Plan", text: "Rate the risks across your audit universe, build the annual plan and start each audit with a work program." },
   { n: "02", title: "Fieldwork", text: "Auditors test each procedure, request evidence from the client and record what they found." },
   { n: "03", title: "Review", text: "Managers review the work, leave review notes and sign off. Nobody can sign off their own work." },
-  { n: "04", title: "Report", text: "Generate the engagement letter, management letter and audit report straight from the file." },
+  { n: "04", title: "Report", text: "Generate the audit report and management letter from the file, and table a committee pack in one click." },
   { n: "05", title: "Follow up", text: "Findings stay open with owners and due dates until the fix is validated and closed." },
 ];
 
 const FEATURES = [
-  { icon: ListChecks, title: "Work programs and sign-off", text: "Procedures with preparer and reviewer sign-off, review notes and a clear status on every step." },
-  { icon: MessageSquareWarning, title: "Findings to closure", text: "Condition, cause, effect and recommendation, a risk rating, an owner and a due date, tracked until validated." },
-  { icon: FileStack, title: "Evidence requests", text: "Ask the client for documents with a due date. They upload through a secure link, without an account." },
-  { icon: Landmark, title: "Trial balance and materiality", text: "Import the trial balance, map accounts to lead schedules, set materiality and see unusual movements flagged." },
-  { icon: FileSignature, title: "Generated documents", text: "Engagement letters, confirmations, representation letters, management letters and audit reports as PDF or Word." },
-  { icon: ScrollText, title: "Complete audit trail", text: "Every sign-off, upload, change and decision is recorded with who did it and when." },
+  { icon: Globe, title: "Audit universe and plan", text: "Every auditable area rated for risk, an annual plan built from it, approved and tracked through the year." },
+  { icon: ShieldCheck, title: "Risks, controls and testing", text: "A controls library mapped to risks and requirements, with design and operating tests on real samples." },
+  { icon: ListChecks, title: "Work programs and sign-off", text: "Ready-made programs or your own, with preparer and reviewer sign-off and review notes on every step." },
+  { icon: BarChart3, title: "Data analytics", text: "Test whole populations of payments, journals and payroll for duplicates, split orders and unusual entries." },
+  { icon: MessageSquareWarning, title: "Findings to closure", text: "Risk-rated findings with owners in the business, escalation when they slip, and validation before closing." },
+  { icon: Presentation, title: "Audit committee reporting", text: "Committee packs with plan progress, ratings and overdue actions, as PDF or Word, ready to table." },
+];
+
+const TYPES = [
+  { icon: Settings2, title: "Operational", text: "Procurement, inventory, branches, projects: how the work is done and controlled." },
+  { icon: Cpu, title: "IT and cyber", text: "Access reviews with segregation-of-duties rules, change management, backups." },
+  { icon: Scale, title: "Compliance", text: "Requirements from laws, regulators and donors, mapped to controls and evidence." },
+  { icon: Gavel, title: "Governance and risk", text: "Board oversight, the risk register, policies, conflicts of interest." },
+  { icon: Search, title: "Investigations", text: "Whistleblowing reports and suspected fraud, with every step on record." },
+  { icon: Leaf, title: "Performance", text: "Whether programmes and projects deliver what they promised, economically." },
+  { icon: Sparkles, title: "Advisory and follow-up", text: "Reviews of new systems, and checks that earlier findings were really fixed." },
+  { icon: Landmark, title: "Financial statements", text: "For audit firms: trial balance, materiality, lead schedules and the auditor's report." },
 ];
 
 export default async function Home() {
@@ -37,13 +48,13 @@ export default async function Home() {
           <div>
             <p className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-white px-3 py-1 text-xs font-medium text-brand-700">
               <span className="h-1.5 w-1.5 rounded-full bg-brand-600" />
-              For audit firms and internal audit teams
+              For internal audit teams and audit firms
             </p>
             <h1 className="mt-6 text-4xl font-semibold leading-[1.1] tracking-tight text-navy-950 sm:text-5xl">
               Plan, test, review and report — <span className="text-brand-600">on one audit file.</span>
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-ink-500">
-              VektaAudit replaces the spreadsheets, email threads and shared folders behind an audit. Work programs, evidence, findings, the trial balance and the final report live in one place, with every sign-off on record.
+              VektaAudit runs risk-based audit across the whole organisation — operations, finance, IT, compliance and governance. The plan, the controls, the testing, the findings and the committee report live in one place, with every sign-off on record.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               {signedIn ? (
@@ -111,11 +122,11 @@ export default async function Home() {
         <div className="mx-auto max-w-6xl">
           <SectionHead eyebrow="Who it's for" title="One system, set up for the way you audit" />
           <div className="mt-12 grid gap-5 lg:grid-cols-3">
+            <Audience icon={ClipboardCheck} title="Internal audit" text="Audit the whole organisation: operations, finance, IT, compliance and governance.">
+              <Ticks items={["Auditable units instead of clients", "Risk-rated findings with owners in the business", "Follow-up until every fix is validated"]} />
+            </Audience>
             <Audience icon={Building2} title="Audit firms" text="Run statutory and assurance audits for many clients.">
               <Ticks items={["A client list with year-ends, frameworks and contacts", "Engagements per client, with a lead, dates and budget hours", "Engagement letters and audit opinions generated for you"]} />
-            </Audience>
-            <Audience icon={ClipboardCheck} title="Internal audit" text="Audit your own organisation's departments and processes.">
-              <Ticks items={["Auditable units instead of clients", "Risk-rated findings with owners in the business", "Follow-up until every fix is validated"]} />
             </Audience>
             <Audience icon={Users} title="Audit committees" text="See the results without changing the work.">
               <Ticks items={["Read-only access for board and committee members", "Open findings by risk, owner and due date", "Reports ready to table at the meeting"]} />
@@ -124,18 +135,21 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* accounting audit */}
+      {/* every kind of audit */}
       <section className="bg-navy-950 px-4 py-20 sm:px-6">
-        <div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-2">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[1px] text-[#7FB2F0]">Financial statement audits</p>
-            <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight text-white sm:text-[34px]">From the trial balance to the opinion</h2>
-            <p className="mt-4 text-[17px] leading-relaxed text-navy-200">Import the client&apos;s trial balance as a CSV file, compare it with last year and let the system point you to what deserves a closer look.</p>
-            <div className="mt-8">
-              <Ticks dark items={["Accounts mapped to lead schedules, with totals that tie", "Overall, performance and trivial materiality on the engagement", "Large movements and balances above materiality flagged automatically", "Audit opinion chosen and the report generated from the file"]} />
-            </div>
-          </div>
-          <TbMock />
+        <div className="mx-auto max-w-6xl">
+          <p className="text-xs font-semibold uppercase tracking-[1px] text-[#7FB2F0]">Every kind of audit</p>
+          <h2 className="mt-3 max-w-2xl text-3xl font-semibold leading-tight tracking-tight text-white sm:text-[34px]">One method, whatever you are auditing</h2>
+          <p className="mt-4 max-w-2xl text-[17px] leading-relaxed text-navy-200">Each engagement has a type, and the file adapts: the work programs it suggests, the report it produces and the tools it opens.</p>
+          <ul className="mt-10 grid gap-px overflow-hidden rounded-2xl border border-navy-700 bg-navy-700 sm:grid-cols-2 lg:grid-cols-4">
+            {TYPES.map((t) => (
+              <li key={t.title} className="bg-navy-900 p-5">
+                <t.icon size={20} className="text-[#7FB2F0]" aria-hidden />
+                <h3 className="mt-3 font-semibold text-white">{t.title}</h3>
+                <p className="mt-1.5 text-[14px] leading-relaxed text-navy-200">{t.text}</p>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
@@ -187,10 +201,10 @@ function Audience({ icon: Icon, title, text, children }: { icon: typeof Users; t
 /** A drawn picture of the engagement screen: illustrative, not live data. */
 function HeroMock() {
   const procs = [
-    ["Revenue cut-off testing", "Signed off", "bg-ok-bg text-ok-fg"],
-    ["Bank reconciliations", "In review", "bg-brand-100 text-brand-700"],
-    ["Inventory count attendance", "In progress", "bg-med-bg text-med-fg"],
-    ["Payroll analytical review", "Not started", "bg-canvas text-ink-500"],
+    ["Supplier master data changes", "Signed off", "bg-ok-bg text-ok-fg"],
+    ["Payment approvals vs delegation", "In review", "bg-brand-100 text-brand-700"],
+    ["ERP access review", "In progress", "bg-med-bg text-med-fg"],
+    ["Duplicate payments analytics", "Not started", "bg-canvas text-ink-500"],
   ];
   return (
     <div aria-hidden className="relative">
@@ -200,7 +214,7 @@ function HeroMock() {
           <span className="h-2.5 w-2.5 rounded-full bg-line-strong" />
           <span className="h-2.5 w-2.5 rounded-full bg-line-strong" />
           <span className="h-2.5 w-2.5 rounded-full bg-line-strong" />
-          <span className="ml-3 truncate font-mono text-[11px] text-ink-400">ENG-2026-014 · Statutory audit FY2026</span>
+          <span className="ml-3 truncate font-mono text-[11px] text-ink-400">ENG-2027-014 · Procurement audit</span>
         </div>
         <div className="flex">
           <div className="hidden w-14 flex-none flex-col items-center gap-3 bg-navy-950 py-4 sm:flex">
@@ -212,8 +226,8 @@ function HeroMock() {
           <div className="min-w-0 flex-1 p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.6px] text-ink-400">Client</p>
-                <p className="font-semibold text-navy-950">Example Manufacturing Ltd</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.6px] text-ink-400">Auditable unit</p>
+                <p className="font-semibold text-navy-950">Group procurement</p>
               </div>
               <span className="pill bg-violet-bg text-violet-fg">Fieldwork</span>
             </div>
@@ -253,53 +267,8 @@ function HeroMock() {
         <p className="flex items-center gap-2 text-[13px] font-medium text-navy-950">
           <span className="h-2 w-2 rounded-full bg-ok-dot" /> Reviewer sign-off recorded
         </p>
-        <p className="mt-0.5 text-[11px] text-ink-400">Bank reconciliations · just now</p>
+        <p className="mt-0.5 text-[11px] text-ink-400">Payment approvals vs delegation · just now</p>
       </div>
-    </div>
-  );
-}
-
-/** A drawn picture of a lead schedule: illustrative figures. */
-function TbMock() {
-  const rows = [
-    ["Revenue", "84,210", "96,540", "+15%", false],
-    ["Cost of sales", "51,300", "58,120", "+13%", false],
-    ["Trade receivables", "12,480", "19,870", "+59%", true],
-    ["Inventory", "9,940", "10,310", "+4%", false],
-    ["Trade payables", "7,620", "7,980", "+5%", false],
-  ] as const;
-  return (
-    <div aria-hidden className="overflow-hidden rounded-2xl border border-navy-700 bg-navy-900">
-      <div className="flex items-center justify-between border-b border-navy-700 px-5 py-3.5">
-        <p className="text-sm font-semibold text-white">Lead schedule · FY2026</p>
-        <p className="font-mono text-[11px] text-navy-300">Materiality 2,400</p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[420px] text-[13px]">
-          <thead>
-            <tr className="text-left text-[11px] uppercase tracking-[0.5px] text-navy-300">
-              <th className="px-5 py-2.5 font-medium">Account</th>
-              <th className="px-3 py-2.5 text-right font-medium">Prior</th>
-              <th className="px-3 py-2.5 text-right font-medium">Current</th>
-              <th className="px-5 py-2.5 text-right font-medium">Change</th>
-            </tr>
-          </thead>
-          <tbody className="tabular">
-            {rows.map(([a, py, cy, ch, flag]) => (
-              <tr key={a} className={`border-t border-navy-800 ${flag ? "bg-[#F9706614]" : ""}`}>
-                <td className="px-5 py-2.5 text-navy-200">
-                  {a}
-                  {flag && <span className="ml-2 rounded bg-[#F9706633] px-1.5 py-0.5 text-[10px] font-semibold text-[#FDA29B]">Look at this</span>}
-                </td>
-                <td className="px-3 py-2.5 text-right text-navy-300">{py}</td>
-                <td className="px-3 py-2.5 text-right text-white">{cy}</td>
-                <td className={`px-5 py-2.5 text-right ${flag ? "text-[#FDA29B]" : "text-navy-200"}`}>{ch}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="border-t border-navy-700 px-5 py-3 text-[12px] text-navy-300">Trial balance balanced · 5 accounts mapped · 1 flag</p>
     </div>
   );
 }

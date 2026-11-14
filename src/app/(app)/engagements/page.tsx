@@ -1,6 +1,7 @@
 import { Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { AUDIT_TYPES, typeLabel } from "@/lib/auditTypes";
 import { Empty, PageHeader, Pill } from "@/components/ui";
 import { PHASE_PILL, PHASES, fmtDate } from "@/lib/format";
 import { can, requireUser } from "@/lib/server/auth";
@@ -8,12 +9,12 @@ import { db } from "@/lib/server/db";
 
 export const metadata: Metadata = { title: "Engagements" };
 
-export default async function EngagementsPage({ searchParams }: { searchParams: Promise<{ phase?: string; kind?: string }> }) {
+export default async function EngagementsPage({ searchParams }: { searchParams: Promise<{ phase?: string; kind?: string; type?: string }> }) {
   const s = await requireUser();
-  const { phase, kind } = await searchParams;
+  const { phase, kind, type } = await searchParams;
   const now = new Date();
   const engagements = await db.engagement.findMany({
-    where: { orgId: s.org, ...(phase ? { phase } : {}), ...(kind ? { kind } : {}) },
+    where: { orgId: s.org, ...(phase ? { phase } : {}), ...(kind ? { kind } : {}), ...(type ? { auditType: type } : {}) },
     orderBy: [{ phase: "asc" }, { dueDate: "asc" }],
     include: {
       lead: { select: { name: true } },
@@ -22,6 +23,9 @@ export default async function EngagementsPage({ searchParams }: { searchParams: 
       _count: { select: { findings: { where: { status: { not: "closed" } } } } },
     },
   });
+  // a chip for each type of audit the organisation runs
+  const used = new Set((await db.engagement.findMany({ where: { orgId: s.org, auditType: { not: null } }, distinct: ["auditType"], select: { auditType: true } })).map((x) => x.auditType));
+  const types = AUDIT_TYPES.filter((t) => used.has(t.key));
   const chip = (label: string, href: string, on: boolean) => (
     <Link key={href} href={href} className={`flex h-9 items-center rounded-full border px-3.5 text-[13px] ${on ? "border-navy-950 bg-navy-950 font-medium text-white" : "border-line-strong bg-white hover:bg-canvas"}`}>
       {label}
@@ -43,9 +47,8 @@ export default async function EngagementsPage({ searchParams }: { searchParams: 
         }
       />
       <div className="flex flex-wrap gap-2">
-        {chip("All", "/engagements", !phase && !kind)}
-        {chip("Internal audits", "/engagements?kind=internal", kind === "internal")}
-        {chip("Financial audits", "/engagements?kind=financial", kind === "financial")}
+        {chip("All", "/engagements", !phase && !kind && !type)}
+        {types.map((t) => chip(t.short, `/engagements?type=${t.key}`, type === t.key))}
         {PHASES.map((p) => chip(p.label, `/engagements?phase=${p.key}`, phase === p.key))}
       </div>
       <section className="card overflow-hidden">
@@ -77,7 +80,7 @@ export default async function EngagementsPage({ searchParams }: { searchParams: 
                           {e.name}
                         </Link>
                         <div className="font-mono text-[11px] text-ink-500">
-                          {e.code} · {e.kind === "financial" ? "Financial" : "Internal"}
+                          {e.code} · {typeLabel(e)}
                         </div>
                       </td>
                       <td className="td">{e.client?.name ?? e.area ?? "—"}</td>

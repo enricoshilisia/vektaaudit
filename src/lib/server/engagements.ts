@@ -6,7 +6,7 @@ import { nextNumber } from "./audit";
 export async function insertEngagement(
   tx: Tx,
   orgId: string,
-  data: { name: string; kind: string; area?: string | null; clientId?: string | null; leadId?: string | null; objective?: string | null; budgetHours?: number; periodStart?: Date | null; periodEnd?: Date | null; dueDate?: Date | null },
+  data: { name: string; kind: string; auditType?: string | null; area?: string | null; clientId?: string | null; leadId?: string | null; objective?: string | null; budgetHours?: number; periodStart?: Date | null; periodEnd?: Date | null; dueDate?: Date | null },
 ) {
   const year = new Date().getFullYear() + 1;
   const n = await nextNumber(tx, orgId, `eng-${year}`);

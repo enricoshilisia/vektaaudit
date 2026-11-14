@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { AUDIT_TYPES, auditTypeOf } from "@/lib/auditTypes";
 import { PHASES, phaseLabel } from "@/lib/format";
 import { logAction, nextNumber } from "@/lib/server/audit";
 import { requireUser } from "@/lib/server/auth";
@@ -38,7 +39,7 @@ export async function createEngagement(form: FormData) {
   const data = z
     .object({
       name: z.string().min(3, "Give the engagement a name"),
-      kind: z.enum(["internal", "financial"]),
+      auditType: z.enum(AUDIT_TYPES.map((t) => t.key) as [string, ...string[]], { message: "Choose the type of audit" }),
       area: z.string().nullable(),
       clientId: z.string().nullable(),
       clientName: z.string().nullable(),
@@ -48,7 +49,7 @@ export async function createEngagement(form: FormData) {
     })
     .parse({
       name: str(form, "name"),
-      kind: str(form, "kind") ?? "internal",
+      auditType: str(form, "auditType"),
       area: str(form, "area"),
       clientId: str(form, "clientId"),
       clientName: str(form, "clientName"),
@@ -68,7 +69,8 @@ export async function createEngagement(form: FormData) {
     if (data.leadId && !(await tx.user.findFirst({ where: { id: data.leadId, orgId: s.org } }))) return fail("Lead not found");
     const created = await insertEngagement(tx, s.org, {
       name: data.name,
-      kind: data.kind,
+      kind: auditTypeOf(data.auditType)!.kind,
+      auditType: data.auditType,
       area: data.area,
       clientId,
       leadId: data.leadId,

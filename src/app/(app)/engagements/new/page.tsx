@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui";
+import { AUDIT_TYPES } from "@/lib/auditTypes";
 import { clientWord } from "@/lib/format";
 import { requireUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
@@ -28,14 +29,17 @@ export default async function NewEngagementPage({ searchParams }: { searchParams
           <input id="name" name="name" required minLength={3} className="input" placeholder="e.g. Procurement & supplier onboarding" />
         </div>
         <fieldset className="sm:col-span-2">
-          <legend className="label">Type</legend>
-          <div className="flex flex-wrap gap-3 text-sm">
-            <label className="flex items-center gap-2 rounded-lg border border-line-strong px-3 py-2">
-              <input type="radio" name="kind" value="internal" defaultChecked={org.kind === "internal"} /> Internal audit — processes and controls
-            </label>
-            <label className="flex items-center gap-2 rounded-lg border border-line-strong px-3 py-2">
-              <input type="radio" name="kind" value="financial" defaultChecked={org.kind !== "internal"} /> Financial audit — opinion on the accounts
-            </label>
+          <legend className="label">Type of audit</legend>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {AUDIT_TYPES.filter((t) => t.kind === "internal" || org.kind !== "internal").map((t) => (
+              <label key={t.key} className="flex cursor-pointer gap-2.5 rounded-lg border border-line-strong px-3 py-2.5 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">
+                <input type="radio" name="auditType" value={t.key} required className="mt-1 flex-none" />
+                <span className="min-w-0">
+                  <span className="block text-[13.5px] font-medium">{t.label}</span>
+                  <span className="block text-[12px] text-ink-500">{t.about}</span>
+                </span>
+              </label>
+            ))}
           </div>
         </fieldset>
         <div>
