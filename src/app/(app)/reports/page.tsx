@@ -72,7 +72,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               </select>
               <button className="btn">Open</button>
             </form>
-            <a href={dl("doc")} className="btn">
+            <a href={dl("docx")} className="btn">
               Word
             </a>
             <a href={dl("pdf")} className="btn">

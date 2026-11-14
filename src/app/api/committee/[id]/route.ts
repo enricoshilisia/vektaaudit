@@ -3,10 +3,11 @@ import { getSession } from "@/lib/server/auth";
 import { type PackData, buildPack } from "@/lib/server/committee";
 import { packDoc } from "@/lib/server/committeePdf";
 import { db } from "@/lib/server/db";
+import { DOCX_MIME, renderDocx } from "@/lib/server/docx";
 import { renderPdf } from "@/lib/server/render";
 
 /** The committee pack as a PDF: the frozen figures once issued, live figures while a draft. */
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const s = await getSession();
   if (!s) return NextResponse.json({ error: "Please sign in" }, { status: 401 });
   if (s.role === "GUEST") return NextResponse.json({ error: "Not available to guests" }, { status: 403 });
@@ -14,8 +15,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!p) return NextResponse.json({ error: "Pack not found" }, { status: 404 });
   const issued = p.status === "issued" && p.snapshot ? { at: p.issuedAt!, by: p.issuedBy ?? "" } : null;
   const d = issued ? (p.snapshot as unknown as PackData) : await buildPack(s.org, p.periodStart, p.periodEnd);
-  const bytes = await renderPdf(packDoc(d, p.title, p.summary, p.meetingDate, issued), p.org.name);
-  const name = `${p.title}${issued ? "" : " (draft)"}.pdf`.replace(/[^\w .'(),-]/g, "");
+  const word = req.nextUrl.searchParams.get("format") === "docx";
+  const gen = packDoc(d, p.title, p.summary, p.meetingDate, issued);
+  const bytes = word ? renderDocx(gen, p.org.name) : await renderPdf(gen, p.org.name);
+  const name = `${p.title}${issued ? "" : " (draft)"}.${word ? "docx" : "pdf"}`.replace(/[^\w .'(),-]/g, "");
   await db.auditLog.create({ data: { orgId: s.org, actorName: s.name, action: "downloaded committee pack", entity: "committee", entityId: p.id, detail: name } });
-  return new NextResponse(new Uint8Array(bytes), { headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename="${name}"`, "cache-control": "private, no-store" } });
+  return new NextResponse(new Uint8Array(bytes), { headers: { "content-type": word ? DOCX_MIME : "application/pdf", "content-disposition": `attachment; filename="${name}"`, "cache-control": "private, no-store" } });
 }

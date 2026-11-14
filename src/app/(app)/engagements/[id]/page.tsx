@@ -31,6 +31,8 @@ import {
   unlockFile,
 } from "../actions";
 import { createTest } from "../../tests/actions";
+import { loadProgram, saveProgram } from "../../programs/actions";
+import { PROGRAMS } from "@/lib/programs";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const e = await db.engagement.findUnique({ where: { id: (await params).id }, select: { name: true } });
@@ -220,6 +222,7 @@ export default async function EngagementPage({ params, searchParams }: { params:
       )}
 
       {tab === "program" && <Program e={e} proc={proc} s={s} done={done} inReview={inReview} />}
+      {tab === "program" && work && !locked && <ProgramLibrary e={e} s={s} />}
       {tab === "notes" && <Notes e={e} s={s} />}
       {tab === "requests" && <Requests e={e} s={s} />}
       {tab === "tests" && <TestsTab e={e} s={s} />}
@@ -746,5 +749,57 @@ async function TestsTab({ e, s }: { e: E; s: S }) {
         )}
       </section>
     </>
+  );
+}
+
+/** Load a standard or saved work program into the engagement, or save its procedures as a program. */
+async function ProgramLibrary({ e, s }: { e: E; s: S }) {
+  const own = await db.programTemplate.findMany({ where: { orgId: s.org }, orderBy: { name: "asc" }, select: { id: true, name: true } });
+  return (
+    <section className="card flex flex-wrap items-end gap-x-6 gap-y-4 p-5">
+      <form action={loadProgram.bind(null, e.id)} className="flex min-w-0 flex-[2_1_380px] flex-wrap items-end gap-2">
+        <div className="min-w-0 flex-1">
+          <label htmlFor="program" className="label">
+            Load a work program
+          </label>
+          <select id="program" name="program" required defaultValue="" className="input">
+            <option value="" disabled>
+              Choose…
+            </option>
+            {own.length > 0 && (
+              <optgroup label="Your organisation's programs">
+                {own.map((t) => (
+                  <option key={t.id} value={`org:${t.id}`}>
+                    {t.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            <optgroup label="Standard programs">
+              {PROGRAMS.map((p) => (
+                <option key={p.key} value={`builtin:${p.key}`}>
+                  {p.name} ({p.steps.length} procedures)
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        </div>
+        <button className="btn">Add its procedures</button>
+        <Link href="/programs" className="pb-2.5 text-[12px]">
+          See all programs
+        </Link>
+      </form>
+      {can(s, "manage") && e.procedures.length > 0 && (
+        <form action={saveProgram.bind(null, e.id)} className="flex min-w-0 flex-[1_1_300px] flex-wrap items-end gap-2">
+          <div className="min-w-0 flex-1">
+            <label htmlFor="programName" className="label">
+              Save these {e.procedures.length} procedures as a program
+            </label>
+            <input id="programName" name="name" required minLength={3} className="input" placeholder={`e.g. ${e.area ?? "Procurement"} audit`} />
+          </div>
+          <button className="btn">Save</button>
+        </form>
+      )}
+    </section>
   );
 }

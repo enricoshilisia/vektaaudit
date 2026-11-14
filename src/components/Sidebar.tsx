@@ -5,6 +5,7 @@ import {
   Activity,
   AlertTriangle,
   Award,
+  BookOpen,
   BarChart3,
   Building2,
   CalendarRange,
@@ -59,6 +60,7 @@ const GROUPS: { title: string; items: Item[] }[] = [
       { href: "/universe", label: "Audit universe", icon: Globe },
       { href: "/plan", label: "Audit plan", icon: CalendarRange },
       { href: "/controls", label: "Risks & controls", icon: ShieldCheck },
+      { href: "/programs", label: "Work programs", icon: BookOpen },
     ],
   },
   {

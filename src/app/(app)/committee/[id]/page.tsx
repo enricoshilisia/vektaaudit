@@ -45,6 +45,9 @@ export default async function PackPage({ params }: { params: Promise<{ id: strin
             <Download size={16} aria-hidden />
             PDF
           </a>
+          <a href={`/api/committee/${p.id}?format=docx`} className="btn">
+            Word
+          </a>
           {manage && org.msTenantId && org.spSiteUrl && (
             <form action={savePackToSharePoint.bind(null, p.id)}>
               <button className="btn">Save to SharePoint</button>

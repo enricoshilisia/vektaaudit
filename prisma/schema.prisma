@@ -63,6 +63,7 @@ model Organization {
   conformance   Conformance[]
   apiKeys       ApiKey[]
   aiUsage       AiUsage[]
+  programs      ProgramTemplate[]
   packs         CommitteePack[]
   time          TimeEntry[]
   assignments   Assignment[]
@@ -954,4 +955,19 @@ model AiUsage {
   org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@index([orgId, createdAt])
+}
+
+/// A work program the organisation saved for reuse: an ordered list of procedures.
+model ProgramTemplate {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  area      String?
+  steps     Json // [{ title, control }]
+  createdBy String
+  createdAt DateTime @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
 }

@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSession } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
-import { renderPdf, renderWord } from "@/lib/server/render";
+import { DOCX_MIME, renderDocx } from "@/lib/server/docx";
+import { renderPdf } from "@/lib/server/render";
 import { OPINIONS, TEMPLATES, type Opinion, type TemplateKey, build, loadContext } from "@/lib/server/templates";
 
 /** Downloads a generated letter or report: ?engagement=&template=&format=pdf|doc[&opinion=] */
@@ -20,11 +21,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Engagement not found" }, { status: 404 });
   }
   const doc = build(t.key as TemplateKey, ctx, { opinion });
-  const word = p.get("format") === "doc";
-  const bytes = word ? Buffer.from(renderWord(doc), "utf8") : await renderPdf(doc, ctx.org.name);
-  const name = `${ctx.code} ${doc.title}.${word ? "doc" : "pdf"}`.replace(/[^\w .'-]/g, "");
+  // Word: a real .docx ("doc" is still accepted from older links)
+  const word = p.get("format") === "docx" || p.get("format") === "doc";
+  const bytes = word ? renderDocx(doc, ctx.org.name) : await renderPdf(doc, ctx.org.name);
+  const name = `${ctx.code} ${doc.title}.${word ? "docx" : "pdf"}`.replace(/[^\w .'-]/g, "");
   await db.auditLog.create({ data: { orgId: s.org, actorName: s.name, action: "downloaded generated document", entity: "engagement", entityId: ctx.id, detail: name } });
   return new NextResponse(new Uint8Array(bytes), {
-    headers: { "content-type": word ? "application/msword" : "application/pdf", "content-disposition": `attachment; filename="${name}"`, "cache-control": "private, no-store" },
+    headers: { "content-type": word ? DOCX_MIME : "application/pdf", "content-disposition": `attachment; filename="${name}"`, "cache-control": "private, no-store" },
   });
 }
