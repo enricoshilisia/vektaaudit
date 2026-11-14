@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Empty, PageHeader, Pill } from "@/components/ui";
 import { DOC_PILL, FOLDERS, fmtDate, fmtDateTime, fmtSize } from "@/lib/format";
 import { can, requireUser } from "@/lib/server/auth";
+import { DocumentSummary } from "@/components/VektaAi";
+import { aiReady } from "@/lib/server/vekta";
 import { db } from "@/lib/server/db";
 import { markReviewed, updateDocument, uploadDocuments } from "./actions";
 
@@ -42,6 +44,7 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
   const shown = (folder ? files.filter((d) => d.folder === folder || d.folder.startsWith(folder + " / ")) : files).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   const sel = q.doc ? files.find((d) => d.id === q.doc) ?? all.find((d) => d.id === q.doc) : null;
   const history = sel ? all.filter((d) => d.folder === sel.folder && d.name === sel.name) : [];
+  const ai = can(s, "work") && (await aiReady(s.org));
   const totalBytes = all.reduce((n, d) => n + d.size, 0);
 
   const href = (patch: Partial<Search>) => {
@@ -214,6 +217,7 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
                     </form>
                   )}
                 </div>
+                {ai && <DocumentSummary key={sel.id} docId={sel.id} initial={(sel.aiSummary as Parameters<typeof DocumentSummary>[0]["initial"]) ?? null} />}
                 {can(s, "work") && (
                   <form action={updateDocument.bind(null, sel.id)} className="flex flex-col gap-2">
                     <span className="eyebrow">Filing</span>

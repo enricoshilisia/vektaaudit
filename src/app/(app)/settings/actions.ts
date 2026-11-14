@@ -257,3 +257,13 @@ export async function newCodes(form: FormData) {
   await showCodesOnce(codes);
   redirect("/setup-mfa?done=1");
 }
+
+export async function setAi(form: FormData) {
+  const s = await requireUser("admin");
+  const on = form.get("aiEnabled") === "on";
+  await db.$transaction(async (tx) => {
+    await tx.organization.update({ where: { id: s.org }, data: { aiEnabled: on } });
+    await logAction(tx, s, on ? "turned on Vekta AI" : "turned off Vekta AI", "organization", s.org);
+  });
+  revalidatePath("/settings/organisation");
+}

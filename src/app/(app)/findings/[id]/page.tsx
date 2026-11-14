@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FindingFields } from "@/components/FindingFields";
+import { FindingDraft } from "@/components/VektaAi";
+import { aiReady } from "@/lib/server/vekta";
 import { Pill, SeverityPill } from "@/components/ui";
 import { FINDING_PILL, SEVERITY, fmtDate, fmtDateTime, isOverdue } from "@/lib/format";
 import { ESC_PILL, daysOverdue, escalation, escalationTo } from "@/lib/issues";
@@ -35,6 +37,7 @@ export default async function FindingPage({ params, searchParams }: { params: Pr
   const late = isOverdue(f.dueDate, f.status === "closed");
   const org = await db.organization.findUniqueOrThrow({ where: { id: s.org } });
   const level = escalation(f, org);
+  const ai = await aiReady(s.org);
   const step = (name: string, label: string, primary = false, withNote = false) => (
     <form action={moveFinding.bind(null, f.id)} className="flex flex-wrap gap-2">
       <input type="hidden" name="step" value={name} />
@@ -87,6 +90,7 @@ export default async function FindingPage({ params, searchParams }: { params: Pr
 
           {edit && can(s, "work") ? (
             <form action={updateFinding.bind(null, f.id)} className="flex flex-col gap-4 p-6">
+              {ai && <FindingDraft engagementId={f.engagementId} />}
               <FindingFields f={f} directory={!!org.msTenantId} />
               <div className="flex gap-2">
                 <button className="btn-primary">Save changes</button>

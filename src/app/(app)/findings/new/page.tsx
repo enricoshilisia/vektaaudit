@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { FindingFields } from "@/components/FindingFields";
+import { FindingDraft } from "@/components/VektaAi";
+import { aiReady } from "@/lib/server/vekta";
 import { PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
@@ -12,6 +14,7 @@ export default async function NewFindingPage({ searchParams }: { searchParams: P
   const s = await requireUser("work");
   const { engagement, ref } = await searchParams;
   const org = await db.organization.findUniqueOrThrow({ where: { id: s.org }, select: { msTenantId: true } });
+  const ai = await aiReady(s.org);
   const engagements = await db.engagement.findMany({ where: { orgId: s.org, phase: { not: "closed" } }, orderBy: { name: "asc" }, select: { id: true, name: true, code: true } });
   return (
     <>
@@ -33,6 +36,7 @@ export default async function NewFindingPage({ searchParams }: { searchParams: P
             ))}
           </select>
         </div>
+        {ai && <FindingDraft />}
         <FindingFields directory={!!org.msTenantId} />
         <div className="flex gap-2">
           <button className="btn-primary">Raise finding</button>

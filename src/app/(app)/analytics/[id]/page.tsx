@@ -5,6 +5,8 @@ import { notFound } from "next/navigation";
 import { DEFAULT_PARAMS, PARAM_LABELS, RULES, kindOf, missingFields, rulesFor, type Kind, type Params } from "@/lib/analytics";
 import { fmtDate, fmtDateTime } from "@/lib/format";
 import { can, requireUser } from "@/lib/server/auth";
+import { ExplainException } from "@/components/VektaAi";
+import { aiReady } from "@/lib/server/vekta";
 import { db } from "@/lib/server/db";
 import { deleteDataSet, explainException, linkEngagement, raiseFindingFrom, reopenException, runAll, saveMapping } from "../actions";
 
@@ -50,6 +52,7 @@ export default async function DataSetPage({ params, searchParams }: { params: Pr
   const sample = await db.dataRow.findMany({ where: { dataSetId: id }, orderBy: { idx: "asc" }, take: 3 });
 
   const mapping = work && (sp.map || missing.length > 0);
+  const ai = work && (await aiReady(s.org));
 
   return (
     <>
@@ -234,7 +237,10 @@ export default async function DataSetPage({ params, searchParams }: { params: Pr
                         return (
                           <tr key={e.id} className="border-t border-line-soft align-top">
                             <td className="td tabular text-ink-500">{e.rowIdx + 2}</td>
-                            <td className="td">{e.detail}</td>
+                            <td className="td">
+                              {e.detail}
+                              {ai && <ExplainException exceptionId={e.id} initial={(e.aiNote as Parameters<typeof ExplainException>[0]["initial"]) ?? null} />}
+                            </td>
                             {shownCols.map((f) => (
                               <td key={f.key} className="td max-w-[180px] truncate" title={cells[columns[f.key]]}>
                                 {cells[columns[f.key]]}

@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { RiskFields } from "@/components/RiskFields";
+import { ControlSuggestions } from "@/components/VektaAi";
+import { aiReady } from "@/lib/server/vekta";
 import { PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
@@ -14,9 +16,15 @@ export default async function RiskPage({ params }: { params: Promise<{ id: strin
   const r = await db.risk.findFirst({ where: { id: (await params).id, orgId: s.org }, include: { controls: { select: { id: true, code: true, title: true } } } });
   if (!r) notFound();
   const processes = (await db.risk.findMany({ where: { orgId: s.org }, select: { process: true }, distinct: ["process"] })).map((x) => x.process);
+  const ai = await aiReady(s.org);
   return (
     <>
       <PageHeader eyebrow={<Link href={`/controls?process=${encodeURIComponent(r.process)}`}>Risks & controls</Link>} title={<>Edit risk <span className="font-mono text-lg text-ink-500">{r.code}</span></>} />
+      {ai && (
+        <div className="max-w-3xl">
+          <ControlSuggestions riskId={r.id} canAdd />
+        </div>
+      )}
       <form action={updateRisk.bind(null, r.id)} className="card flex max-w-3xl flex-col gap-6 p-6">
         <RiskFields r={r} processes={processes} />
         <div>

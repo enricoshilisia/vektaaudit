@@ -37,6 +37,7 @@ model Organization {
   lockAfterDays  Int       @default(60) // closed audit files lock this many days after closing
   retentionYears Int       @default(7) // closed audits can be deleted after this many years
   requireMfa     Boolean   @default(false) // password sign-ins need an authenticator code
+  aiEnabled      Boolean   @default(true) // Vekta AI on for this organisation
   createdAt      DateTime  @default(now())
 
   users         User[]
@@ -61,6 +62,7 @@ model Organization {
   qaReviews     QaReview[]
   conformance   Conformance[]
   apiKeys       ApiKey[]
+  aiUsage       AiUsage[]
   packs         CommitteePack[]
   time          TimeEntry[]
   assignments   Assignment[]
@@ -336,24 +338,26 @@ model PortalLink {
 
 /// A file on the audit file. Uploading the same name to the same folder adds a version.
 model Document {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   orgId        String
   engagementId String?
   requestId    String?
   csaItemId    String?
-  folder       String   @default("C · Fieldwork")
+  folder       String    @default("C · Fieldwork")
   name         String
   ext          String
   mime         String
   size         Int
   storageKey   String
-  version      Int      @default(1)
+  version      Int       @default(1)
   linkRef      String? // the working-paper or procedure reference it supports, e.g. C1.3
-  source       String   @default("auditor") // auditor | client | generated
-  status       String   @default("uploaded") // uploaded | reviewed | client_upload
+  source       String    @default("auditor") // auditor | client | generated
+  status       String    @default("uploaded") // uploaded | reviewed | client_upload
   template     String? // generated documents: the template key
   uploadedBy   String
-  createdAt    DateTime @default(now())
+  aiSummary    Json? // Vekta AI's summary, kept so it's only made once
+  aiSummaryAt  DateTime?
+  createdAt    DateTime  @default(now())
 
   org        Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   engagement Engagement?      @relation(fields: [engagementId], references: [id], onDelete: Cascade)
@@ -756,6 +760,7 @@ model AnalyticException {
   reviewedBy String?
   reviewedAt DateTime?
   findingId  String?
+  aiNote     Json? // Vekta AI's explanation, kept so it's only made once
 
   run AnalyticRun @relation(fields: [runId], references: [id], onDelete: Cascade)
 
@@ -933,4 +938,20 @@ model ApiKey {
   revokedAt  DateTime?
 
   org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+
+/// One Vekta AI request, for the organisation's usage figures.
+model AiUsage {
+  id           String   @id @default(cuid())
+  orgId        String
+  feature      String
+  model        String
+  inputTokens  Int
+  outputTokens Int
+  userName     String
+  createdAt    DateTime @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt])
 }

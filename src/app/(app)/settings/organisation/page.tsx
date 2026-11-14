@@ -2,12 +2,15 @@ import type { Metadata } from "next";
 import { CURRENCIES, fmtDate } from "@/lib/format";
 import { requireUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
-import { updateEscalation, updateGovernance, updateOrganisation } from "../actions";
+import { setAi, updateEscalation, updateGovernance, updateOrganisation } from "../actions";
+import { aiConfigured } from "@/lib/server/vekta";
 
 export const metadata: Metadata = { title: "Organisation" };
 
 export default async function OrganisationPage() {
   const s = await requireUser("admin");
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const usage = await db.aiUsage.groupBy({ by: ["feature"], where: { orgId: s.org, createdAt: { gte: monthStart } }, _count: { _all: true }, orderBy: { feature: "asc" } });
   const org = await db.organization.findUniqueOrThrow({ where: { id: s.org }, include: { _count: { select: { users: true, clients: true, engagements: true } } } });
   return (
     <div className="flex flex-wrap items-start gap-6">
@@ -40,6 +43,36 @@ export default async function OrganisationPage() {
           </select>
         </div>
         <button className="btn-primary self-start">Save</button>
+      </form>
+      <form id="ai" action={setAi} className="card flex max-w-xl flex-[999_1_420px] flex-col gap-3 p-6">
+        <h2 className="text-[15px] font-semibold">Vekta AI</h2>
+        <p className="text-[13px] text-ink-500">Drafts findings and test conclusions, summarises uploaded evidence, suggests controls for risks and explains analytics exceptions. Everything it writes is a draft for your team to check.</p>
+        {!aiConfigured() ? (
+          <p className="text-[13px] text-med-fg">Vekta AI isn&apos;t set up on this server yet.</p>
+        ) : (
+          <>
+            <label className="flex items-center gap-2.5 text-[13px]">
+              <input type="checkbox" name="aiEnabled" defaultChecked={org.aiEnabled} className="h-4 w-4" />
+              Vekta AI is available to the team
+            </label>
+            <button className="btn self-start">Save</button>
+            <div className="text-[13px]">
+              <p className="label">Used this month</p>
+              {usage.length === 0 ? (
+                <p className="text-ink-500">Not used yet this month.</p>
+              ) : (
+                <ul className="flex flex-col gap-1">
+                  {usage.map((u) => (
+                    <li key={u.feature} className="flex justify-between">
+                      <span className="first-letter:uppercase">{u.feature}</span>
+                      <span className="tabular font-medium">{u._count._all}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </>
+        )}
       </form>
       <form id="governance" action={updateGovernance} className="card flex max-w-xl flex-[999_1_420px] flex-col gap-4 p-6">
         <div>

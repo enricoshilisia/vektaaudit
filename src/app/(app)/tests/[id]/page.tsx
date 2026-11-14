@@ -6,6 +6,8 @@ import { Pill } from "@/components/ui";
 import { fmtAmount, fmtDateTime } from "@/lib/format";
 import { CONTROL_NATURE, FREQUENCIES, OPERATING_PILL, TEST_METHODS, TEST_STATUS, countExceptions, labelOf, suggestedResult, suggestedSample, type Attribute } from "@/lib/risk";
 import { can, requireUser } from "@/lib/server/auth";
+import { ConclusionDraft } from "@/components/VektaAi";
+import { aiReady } from "@/lib/server/vekta";
 import { db } from "@/lib/server/db";
 import { addSamples, pickRandom, removeSample, reopenTest, saveAttributes, saveDesign, saveResults, sendBackTest, signOffTest, submitTest } from "../actions";
 
@@ -36,6 +38,7 @@ export default async function TestPage({ params }: { params: Promise<{ id: strin
   const rate = t.samples.length ? (exceptions / t.samples.length) * 100 : 0;
   const suggestion = suggestedResult(t.samples.length, exceptions, t.tolerableRate);
   const size = suggestedSample(t.control, t.confidence, t.tolerableRate, t.population);
+  const ai = editable && (await aiReady(s.org));
   const recorded = t.samples.filter((sm) => attrs.every((a) => (sm.results as Record<string, string>)[a.key])).length;
 
   return (
@@ -340,6 +343,7 @@ export default async function TestPage({ params }: { params: Promise<{ id: strin
                 <label htmlFor="conclusion" className="label">
                   Conclusion
                 </label>
+                {ai && t.samples.length > 0 && <ConclusionDraft testId={t.id} />}
                 <textarea id="conclusion" name="conclusion" rows={5} defaultValue={t.conclusion ?? ""} className="textarea" placeholder="What was tested, what was found, why the result is what it is, and any finding raised." />
               </div>
               <div className="flex flex-wrap gap-2">
